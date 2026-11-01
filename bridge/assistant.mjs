@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { dataDirectory } from './paths.mjs'
+import { dataDirectory, replaceFile } from './paths.mjs'
 import { projectFiles } from './projects.mjs'
 import { desktopApps } from './desktop.mjs'
 import { wordOffice } from './word.mjs'
@@ -35,7 +35,7 @@ export class AssistantMemory {
       await fs.mkdir(this.directory, { recursive: true })
       const temp = path.join(this.directory, `${randomUUID()}.tmp`)
       await fs.writeFile(temp, JSON.stringify(state, null, 2), { flag: 'wx' })
-      await fs.rename(temp, path.join(this.directory, 'assistant.json')); return result
+      await replaceFile(temp, path.join(this.directory, 'assistant.json')); return result
     }); this.queue = next.catch(() => {}); return next
   }
   save(input) {

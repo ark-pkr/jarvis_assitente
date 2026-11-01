@@ -223,7 +223,7 @@ export default function App() {
         filled = true
         store.getState().setCaption('Entendi, vou verificar.')
         spk.sayFast('Entendi, vou verificar.')
-      }, 650)
+      }, 1800)
       const { text } = await ask(said, history.current, {
         onText: (delta) => {
           if (stale()) return

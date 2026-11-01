@@ -139,7 +139,6 @@ Excel or PowerPoint editing; those tools are not provided.`
 
 const CONVERSATION = `CONVERSATION: Short questions and greetings are valid requests. Answer directly;
 never ask the user to confirm a clear transcript merely because it is short.
-Use local_time for the real current time/date in America/Sao_Paulo.
 For ambiguous references, use recent conversation and known project context.
 If the requested object or action is still unclear, ask one specific question
 in Portuguese instead of inventing an intention. Preserve negations exactly.
@@ -321,7 +320,7 @@ const TOPICS = [
   { text: EVERYDAY, words: /clima|\btempo\b|chuva|chove|temperatura|previsao|calor|\bfrio\b|musica|\bfaixa|volume|\bsom\b|\bmudo\b|\bpausa\b|\btoca|\bspotify/ },
 ]
 
-const plain = (text) => text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
+export const plain = (text) => text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
 
 /**
  * The prompt for one request. Reads the request and the last exchange, so a

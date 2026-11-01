@@ -23,6 +23,76 @@ export function pcmToWav(raw, rate = 24000) {
   return Buffer.concat([header, pcm])
 }
 
+/** Older voice models say pcm, newer ones audio/l16; it is the same audio. */
+const PCM = /pcm|l16/i
+const speechModel = () => process.env.JARVIS_TTS_MODEL || 'gemini-3.1-flash-tts-preview'
+const speechPrompt = (text) => `Leia apenas o texto a seguir em português do Brasil, com fala direta, fluida e natural. Use ritmo de conversa ligeiramente acelerado, articulando com clareza. Conecte as frases e use pausas muito curtas, somente onde a pontuação for necessária à compreensão. Não fale pausadamente, não faça pausas dramáticas nem alongue palavras. Não acrescente palavras nem leia esta orientação.\n\n${text}`
+
+/** A WAV header for audio of unknown length, which players read until the end. */
+export function streamingWavHeader(rate) {
+  const header = pcmToWav(Buffer.alloc(2), rate).subarray(0, 44)
+  header.writeUInt32LE(0xffffffff, 4)
+  header.writeUInt32LE(0xffffffff - 36, 40)
+  return header
+}
+
+/** pcmToWav normalises to the peak, which a stream cannot know yet. */
+const STREAM_GAIN = 1.5
+export function amplified(pcm) {
+  const out = Buffer.from(pcm)
+  for (let i = 0; i + 1 < out.length; i += 2) out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(out.readInt16LE(i) * STREAM_GAIN))), i)
+  return out
+}
+
+/**
+ * The voice as it is generated, to be played while it arrives.
+ *
+ * Waiting for a whole sentence costs three to six seconds; the first audio of a
+ * stream arrives in about one. Nothing is sent until that audio exists, so a
+ * failure is still an HTTP error and the speaker can fall back to the system
+ * voice.
+ */
+export async function handleSpeechStream(req, res, cors, ai) {
+  const controller = new AbortController()
+  res.on('close', () => { if (!res.writableEnded) controller.abort() })
+  let started = false
+  try {
+    if (!process.env.GEMINI_API_KEY && !ai) { res.writeHead(503, cors); return res.end('Voz neural não configurada.') }
+    const query = new URL(req.url, 'http://localhost').searchParams
+    const text = query.get('text')?.trim() ?? ''
+    if (!text || text.length > 4000) { res.writeHead(400, cors); return res.end('Texto inválido.') }
+    const client = ai ?? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+    const stream = await client.models.generateContentStream({
+      model: speechModel(), contents: speechPrompt(text),
+      config: { responseModalities: ['AUDIO'], abortSignal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: selectGeminiVoice(query.get('voice')) } } } },
+    })
+    // Chunks can split a 16-bit sample, and a stray byte turns the rest to noise.
+    let carry = Buffer.alloc(0)
+    for await (const chunk of stream) {
+      const audio = chunk.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData
+      if (!audio?.data) continue
+      if (!PCM.test(audio.mimeType || '')) throw new Error('Formato de áudio inesperado.')
+      if (!started) {
+        started = true
+        res.writeHead(200, { ...cors, 'content-type': 'audio/wav', 'cache-control': 'no-store', 'accept-ranges': 'none' })
+        res.write(streamingWavHeader(Number(/rate=(\d+)/.exec(audio.mimeType)?.[1] || 24000)))
+      }
+      const bytes = Buffer.concat([carry, Buffer.from(audio.data, 'base64')])
+      const even = bytes.length - (bytes.length % 2)
+      carry = bytes.subarray(even)
+      res.write(amplified(bytes.subarray(0, even)))
+    }
+    if (!started) throw new Error('Sem áudio.')
+    res.end()
+  } catch (error) {
+    if (res.destroyed || res.writableEnded) return
+    if (started) return void res.destroy()
+    res.writeHead(error.status === 429 ? 429 : 502, cors)
+    res.end('Não foi possível gerar a voz neural.')
+  }
+}
+
 export async function handleSpeech(req, res, cors) {
   const controller = new AbortController()
   res.on('close', () => { if (!res.writableEnded) controller.abort() })
@@ -40,13 +110,13 @@ export async function handleSpeech(req, res, cors) {
     const voice = selectGeminiVoice(request.voice)
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
     const response = await ai.models.generateContent({
-      model: process.env.JARVIS_TTS_MODEL || 'gemini-2.5-flash-preview-tts',
-      contents: `Leia apenas o texto a seguir em português do Brasil, com fala direta, fluida e natural. Use ritmo de conversa ligeiramente acelerado, articulando com clareza. Conecte as frases e use pausas muito curtas, somente onde a pontuação for necessária à compreensão. Não fale pausadamente, não faça pausas dramáticas nem alongue palavras. Não acrescente palavras nem leia esta orientação.\n\n${text}`,
+      model: speechModel(),
+      contents: speechPrompt(text),
       config: { responseModalities: ['AUDIO'], abortSignal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
     })
     const audio = response.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData
-    if (!audio?.data || !/pcm/i.test(audio.mimeType || '')) throw new Error('Sem áudio.')
+    if (!audio?.data || !PCM.test(audio.mimeType || '')) throw new Error('Sem áudio.')
     const rate = Number(/rate=(\d+)/.exec(audio.mimeType)?.[1] || 24000)
     const wav = pcmToWav(Buffer.from(audio.data, 'base64'), rate)
     res.writeHead(200, { ...cors, 'content-type': 'audio/wav', 'cache-control': 'no-store', 'content-length': wav.length })

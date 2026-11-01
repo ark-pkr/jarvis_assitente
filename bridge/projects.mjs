@@ -2,7 +2,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { promises as fs, createReadStream } from 'node:fs'
 import path from 'node:path'
-import { dataPath } from './paths.mjs'
+import { dataPath, replaceFile } from './paths.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 
@@ -199,7 +199,7 @@ export class ProjectFiles {
     await fs.mkdir(this.data, { recursive: true })
     const temp = path.join(this.data, `${randomUUID()}.tmp`)
     await fs.writeFile(temp, JSON.stringify(state, null, 2), { flag: 'wx' })
-    await fs.rename(temp, path.join(this.data, 'state.json'))
+    await replaceFile(temp, path.join(this.data, 'state.json'))
   }
   // Serialize mutations, including confirmations, to avoid applying competing plans.
   mutate(operation) {
@@ -502,7 +502,7 @@ export class ProjectFiles {
         signal?.throwIfAborted()
         if (hadFile) {
           if ((await this.read(rootId, file)).hash !== previous.hash) throw new Error('Arquivo alterado durante a gravação. Nada foi aplicado.')
-          await fs.rename(temp, target)
+          await replaceFile(temp, target)
         } else await this.moveExclusive(temp, target)
       } finally { if (await exists(temp)) await fs.unlink(temp) }
       change.status = 'applied'; await this.save(state)

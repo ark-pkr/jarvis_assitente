@@ -141,7 +141,8 @@ navegador ou Electron  ⇄  bridge/server.mjs (WebSocket e HTTP em 127.0.0.1)
 |---|---|---|
 | `JARVIS_PROVIDER` | `gemini` | `gemini` ou `claude` |
 | `JARVIS_MODEL` | `gemini-3.5-flash` | Modelo de conversa |
-| `JARVIS_TTS_MODEL` | `gemini-2.5-flash-preview-tts` | Modelo de voz |
+| `JARVIS_LIGHT_MODEL` | `gemini-3.5-flash-lite` | Modelo das perguntas simples, que não usam ferramentas |
+| `JARVIS_TTS_MODEL` | `gemini-3.1-flash-tts-preview` | Modelo de voz |
 | `JARVIS_EFFORT` | `high` | Esforço de raciocínio no provedor Claude |
 | `JARVIS_BRIDGE_PORT` | `8787` | Porta do serviço |
 | `JARVIS_ALLOWED_ORIGINS` | origens locais | Origens adicionais do WebSocket |

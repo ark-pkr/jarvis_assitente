@@ -22,7 +22,7 @@ import { geminiQuery } from './gemini.mjs'
 import { memoryServer } from './memory.mjs'
 import { personalRecords } from './turn-context.mjs'
 import { projectServer } from './projects.mjs'
-import { handleSpeech } from './speech.mjs'
+import { handleSpeech, handleSpeechStream } from './speech.mjs'
 import { desktopServer } from './desktop.mjs'
 import { wordServer } from './word.mjs'
 import { lessonServer } from './lessons.mjs'
@@ -221,6 +221,7 @@ const handleRequest = async (req, res) => {
   if (req.url === '/assistant' || req.url === '/assistant/alerts' || req.url === '/assistant/context' || req.url === '/studio') return handleAssistantRequest(req, res, cors)
   if (req.method === 'GET' && req.url?.startsWith('/lesson-pdf?')) return handleLessonPdf(req, res, cors)
   if (req.method === 'POST' && req.url === '/voice') return handleSpeech(req, res, cors)
+  if (req.method === 'GET' && req.url?.startsWith('/voice/stream?')) return handleSpeechStream(req, res, cors)
 
   if (isMediaRequest(req)) return serveMedia(req, res, cors, PORT)
   if (isSpeechRequest(req)) return serveSpeech(req, res, cors)
@@ -515,6 +516,8 @@ wss.on('connection', (socket) => {
       // of input tokens on every turn. Replacing it makes the persona stick,
       // keeps answers short enough to speak, and cuts cost per turn.
       systemPrompt: PROVIDER === 'gemini' ? buildSystemPrompt : SYSTEM_PROMPT,
+      routeTools: PROVIDER === 'gemini',
+      lightModel: process.env.JARVIS_LIGHT_MODEL?.trim() || 'gemini-3.5-flash-lite',
       // Run from the home directory so project-scoped MCP servers don't shadow
       // the global ones, and so file tools have a sane root.
       cwd: homedir(),

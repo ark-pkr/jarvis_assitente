@@ -105,7 +105,11 @@ test('transcription service returns a timeout even when the provider ignores its
     writeHead(status) { this.statusCode = status },
     end(body) { this.body = body; this.writableEnded = true },
   }
-  await handleTranscription(req, res, {}, () => new Promise(() => {}), 10)
+  // AbortSignal.timeout does not keep the process alive. A running server does;
+  // a test has to, or Node 22 sees an empty event loop and cancels it.
+  const alive = setInterval(() => {}, 1000)
+  try { await handleTranscription(req, res, {}, () => new Promise(() => {}), 10) }
+  finally { clearInterval(alive) }
   assert.equal(res.statusCode, 504)
   assert.match(JSON.parse(res.body).error, /demorou demais/)
 })

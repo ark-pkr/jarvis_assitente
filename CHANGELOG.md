@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 1.4.1
+
+**Velocidade**
+- Perguntas simples: a primeira palavra do modelo caiu de cerca de 3,5 s para menos de 1 s.
+- Cada pedido carrega só as ferramentas do assunto, em vez de todas, e usa um modelo mais leve; se algo faltar, o JARVIS abre o resto sozinho.
+- A voz neural toca enquanto é gerada, com o primeiro som em cerca de 1 s em vez de 3 a 6 s, mantendo o tom em qualquer velocidade.
+- A data e a hora acompanham cada pedido, sem consultar ferramenta.
+
 ## 1.4.0
 
 **Presença**

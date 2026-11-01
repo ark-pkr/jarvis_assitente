@@ -1,3 +1,4 @@
+import { createStretcher, type Stretcher } from './timeStretch'
 import {
   env,
   USE_ELEVENLABS,
@@ -307,6 +308,9 @@ export function createSpeaker(): Speaker {
   let pumping = false
 
   let currentAudio: HTMLAudioElement | null = null
+  /** Voices already arriving, until their turn to play. */
+  const streaming = new Map<string, Promise<Response | null>>()
+  let streams = 0
   let nativeInFlight = false
   let activeFinish: (() => void) | null = null
   let drained: Array<() => void> = []
@@ -340,16 +344,13 @@ export function createSpeaker(): Speaker {
   function synthesise(text: string): Promise<string | null> | null {
     if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) {
       diag.engine = 'gemini'
-      return fetch(`${BRIDGE_HTTP_URL}/voice`, { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text, voice: useWorkspace.getState().settings.neuralVoice }), signal: controller.signal,
-      }).then(async (response) => {
-        if (!response.ok) throw new Error('Voz neural indisponível.')
-        const blob = await response.blob()
-        return cancelled ? null : URL.createObjectURL(blob)
-      }).catch(() => {
-        if (!cancelled) { neuralRetryAt = Date.now() + 60000; diag.lastError = 'voz-neural-indisponível' }
-        return null
-      })
+      // Started here, one sentence ahead, so the next sentence is already
+      // arriving when this one ends. The key is not a URL: the same sentence
+      // can be queued twice, and each needs its own stream.
+      const url = `${BRIDGE_HTTP_URL}/voice/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(useWorkspace.getState().settings.neuralVoice)}`
+      const key = `stream:${++streams}`
+      streaming.set(key, fetch(url, { signal: controller.signal }).catch(() => null))
+      return Promise.resolve(key)
     }
     // Prefer the ElevenLabs voice whenever the bridge reports it is available —
     // for a demo the timbre is worth the round trip, and this is what makes the
@@ -405,8 +406,15 @@ export function createSpeaker(): Speaker {
       if (cancelled) return
       // A failed generation is not a failed turn — drop to the system voice.
       if (url) {
-        await playUrl(url, item.text)
-        return
+        if (!streaming.has(url)) {
+          await playUrl(url, item.text)
+          return
+        }
+        if (await playStream(url, item.text) || cancelled) return
+        // The neural voice failed before any sound came out. Same answer, plainer
+        // voice, and no asking it again for a minute.
+        neuralRetryAt = Date.now() + 60000
+        diag.lastError = 'voz-neural-indisponível'
       }
 
       diag.engine = 'system'
@@ -559,6 +567,122 @@ export function createSpeaker(): Speaker {
       speechSynthesis.speak(u)
     })
 
+  /**
+   * Plays the voice as it arrives, block by block. Resolves false only if it
+   * failed before any sound came out, which is the one case worth falling back.
+   */
+  const playStream = (key: string, text: string) =>
+    new Promise<boolean>((resolve) => {
+      const arriving = streaming.get(key)
+      streaming.delete(key)
+      const ctx = outputContext()
+      if (!ctx || !arriving) { resolve(false); return }
+      const { voiceVolume, voiceRate } = useWorkspace.getState().settings
+      diag.spoken++
+      diag.lastText = text.slice(0, 60)
+      diag.voice = 'Gemini'
+
+      const volume = ctx.createGain()
+      volume.gain.value = voiceVolume
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      volume.connect(analyser)
+      analyser.connect(ctx.destination)
+      const bins = new Uint8Array(analyser.frequencyBinCount)
+      // A timer, not a frame callback: the orb has to keep moving with the
+      // window hidden.
+      const meter = setInterval(() => {
+        analyser.getByteFrequencyData(bins as Uint8Array<ArrayBuffer>)
+        let sum = 0
+        for (let i = 2; i < bins.length; i++) sum += bins[i]
+        outLevel = Math.min(1, (sum / (bins.length - 2) / 255) * 3.5)
+      }, 33)
+
+      const sources = new Set<AudioBufferSourceNode>()
+      let sounded = false
+      let arrived = false
+      let nextStart = 0
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        if (activeFinish === finish) activeFinish = null
+        clearInterval(meter)
+        for (const source of sources) { source.onended = null; try { source.stop() } catch { /* never started */ } }
+        volume.disconnect()
+        analyser.disconnect()
+        outLevel = 0.12
+        resolve(sounded)
+      }
+      activeFinish = finish
+
+      const schedule = (samples: Float32Array, rate: number) => {
+        if (done || !samples.length) return
+        const block = ctx.createBuffer(1, samples.length, rate)
+        block.copyToChannel(samples as Float32Array<ArrayBuffer>, 0)
+        const source = ctx.createBufferSource()
+        source.buffer = block
+        source.connect(volume)
+        source.onended = () => {
+          sources.delete(source)
+          if (arrived && !sources.size) finish()
+        }
+        sources.add(source)
+        // A small lead, so a late block does not become a gap. If the network falls
+        // behind, carry on from now rather than from a moment already gone.
+        nextStart = Math.max(nextStart, ctx.currentTime + .15)
+        source.start(nextStart)
+        nextStart += block.duration
+        if (!sounded) {
+          sounded = true
+          diag.started++
+          diag.lastError = ''
+        }
+      }
+
+      void (async () => {
+        const response = await arriving
+        if (!response?.ok || !response.body) { finish(); return }
+        const reader = response.body.getReader()
+        let header = new Uint8Array(0)
+        let carry: number | null = null
+        let rate = 24000
+        let stretcher: Stretcher | null = null
+        for (;;) {
+          const { value, done: ended } = await reader.read()
+          if (ended) break
+          if (done) { void reader.cancel().catch(() => {}); return }
+          let bytes: Uint8Array = value
+          if (!stretcher) {
+            const joined = new Uint8Array(header.length + bytes.length)
+            joined.set(header)
+            joined.set(bytes, header.length)
+            if (joined.length < 44) { header = joined; continue }
+            rate = new DataView(joined.buffer).getUint32(24, true)
+            stretcher = createStretcher(voiceRate, rate)
+            bytes = joined.subarray(44)
+          }
+          // A 16-bit sample can fall across two network reads.
+          const paired: Uint8Array<ArrayBuffer> = new Uint8Array((carry === null ? 0 : 1) + bytes.length)
+          if (carry !== null) paired[0] = carry
+          paired.set(bytes, carry === null ? 0 : 1)
+          const count = paired.length >> 1
+          carry = paired.length % 2 ? paired[paired.length - 1] : null
+          const view = new DataView(paired.buffer)
+          const samples = new Float32Array(count)
+          for (let i = 0; i < count; i++) samples[i] = view.getInt16(i * 2, true) / 32768
+          schedule(stretcher.push(samples), rate)
+        }
+        if (stretcher) schedule(stretcher.flush(), rate)
+        arrived = true
+        if (!sources.size) finish()
+      })().catch(() => {
+        // A stream cut mid-sentence still plays what already arrived.
+        arrived = true
+        if (!sources.size) finish()
+      })
+    })
+
   const playUrl = (url: string, text: string) =>
     new Promise<void>((resolve) => {
       const audio = new Audio(url)
@@ -699,6 +823,7 @@ export function createSpeaker(): Speaker {
       buffer = ''
       queue.forEach((item) => { if (item.audio) void item.audio.then((url) => { if (url) URL.revokeObjectURL(url) }) })
       queue.length = 0
+      streaming.clear()
       // Keep the echo tail: the words already in the air still have to be
       // recognised and discarded, even though he has stopped adding to them.
       setSpeaking('')
