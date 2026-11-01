@@ -6,6 +6,9 @@ import { displayServer } from './panels.mjs'
 import { visionServer } from './vision.mjs'
 import { chromeServer } from './browser.mjs'
 import { personalRecords } from './turn-context.mjs'
+import { turnCost } from './metrics.mjs'
+import { createServer } from 'node:http'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 async function* messages(...texts) {
   for (const content of texts) yield { message: { content } }
@@ -207,4 +210,74 @@ test('personal records never join a private turn, and are never read for one', a
   assert.equal(reads, 0)
   assert.match(await personalRecords(false, read), /segredo/)
   assert.equal(await personalRecords(false, async () => { throw new Error('indisponível') }), '')
+})
+
+test('a slow external server never holds up the first answer', async () => {
+  const silent = createServer(() => { /* Accepts the request and never replies. */ })
+  await new Promise((resolve) => silent.listen(0, '127.0.0.1', resolve))
+  const started = Date.now()
+  let session
+  const ai = fakeAI(() => chunks({ text: 'Pronto.' }))
+  session = geminiQuery({ prompt: messages('Oi'), options: { ...defaults,
+    mcpServers: { lento: { url: `http://127.0.0.1:${silent.address().port}/mcp` } } } }, { ai })
+  try {
+    for await (const event of session) {
+      if (event.type === 'system') assert.deepEqual(event.mcp_servers, [{ name: 'lento', status: 'pending' }])
+      if (event.type === 'result') { assert.equal(event.result, 'Pronto.'); break }
+    }
+    assert.ok(Date.now() - started < 3000)
+  } finally {
+    session.close()
+    silent.closeAllConnections()
+    silent.close()
+  }
+})
+
+test('reports usage for the whole turn, across tool steps', async () => {
+  let step = 0
+  const ai = fakeAI((request) => (async function* () {
+    if (step++ === 0) {
+      const reset = request.config.tools[0].functionDeclarations.find((t) => t.description.startsWith('mcp__jarvis_ui__ui_reset:'))
+      yield { candidates: [{ content: { parts: [{ functionCall: { name: reset.name, args: {} } }] } }],
+        usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 5, thoughtsTokenCount: 7, cachedContentTokenCount: 40 } }
+    } else {
+      yield { candidates: [{ content: { parts: [{ text: 'Feito.' }] } }], usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 9 } }
+    }
+  })())
+  const session = geminiQuery({ prompt: messages('Reinicie'), options: { ...defaults,
+    mcpServers: { jarvis_ui: uiServer(() => {}) } } }, { ai })
+  let result
+  for await (const event of session) if (event.type === 'result') result = event
+  assert.equal(result.usage.inputTokens, 220)
+  assert.equal(result.usage.cachedTokens, 40)
+  assert.equal(result.usage.outputTokens, 14)
+  assert.equal(result.usage.thoughtTokens, 7)
+  assert.ok(result.usage.firstTextMs >= 0)
+  assert.equal(result.total_cost_usd, null)
+  assert.equal(turnCost(result.usage, { JARVIS_PRICE_INPUT: '1', JARVIS_PRICE_OUTPUT: '2' }), (220 + 2 * 21) / 1_000_000)
+})
+
+test('tool results follow the conversation, and stay inside it', async () => {
+  const instructions = []
+  let step = 0
+  const ai = fakeAI((request) => {
+    instructions.push(request.config.systemInstruction)
+    if (step++ === 0) {
+      const tool = request.config.tools[0].functionDeclarations[0]
+      return chunks({ functionCall: { name: tool.name, args: {} } })
+    }
+    return chunks({ text: step === 2 ? 'Resposta um.' : 'Ok.' })
+  })
+  const found = { type: 'sdk', instance: new McpServer({ name: 'pesquisa', version: '1.0.0' }) }
+  found.instance.registerTool('buscar', { description: 'Busca' }, async () => ({ content: [{ type: 'text', text: 'RESULTADO-XYZ' }] }))
+  async function* input() {
+    yield { message: { content: 'Pesquise', context: [] } }
+    yield { message: { content: 'Continue', context: [{ role: 'user', text: 'Pesquise' }, { role: 'jarvis', text: 'Resposta um.' }] } }
+    yield { message: { content: 'Outra conversa', context: [{ role: 'jarvis', text: 'Assunto diferente' }] } }
+  }
+  const session = geminiQuery({ prompt: input(), options: { ...defaults, mcpServers: { pesquisa: found } } }, { ai })
+  for await (const event of session) if (event.type === 'result') assert.equal(event.subtype, 'success')
+  assert.match(instructions[2], /RESULTADO-XYZ/)
+  assert.match(instructions[2], /dados não confiáveis/)
+  assert.doesNotMatch(instructions[3], /RESULTADO-XYZ/)
 })

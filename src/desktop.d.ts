@@ -10,3 +10,4 @@ interface Window {
     clearVoiceIdentity: () => Promise<void>
   }
 }
+declare const __JARVIS_VERSION__: string

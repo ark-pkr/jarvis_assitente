@@ -114,5 +114,5 @@ export function conversationContext() {
     : ''
   return { context: state.settings.privacyMode ? [] : state.sessions.find((s) => s.id === state.active)?.turns.slice(-40) ?? [],
     memory: state.settings.privacyMode ? privacy : [profile, state.settings.remember ? state.memory : ''].filter(Boolean).join('\n').slice(0, 6000),
-    fast: state.settings.fast, privacyMode: state.settings.privacyMode }
+    fast: state.settings.fast, privacyMode: state.settings.privacyMode, mode: state.settings.mode }
 }

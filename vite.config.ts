@@ -2,12 +2,16 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 
 // https://vite.dev/config/
 const root = fileURLToPath(new URL('.', import.meta.url))
 
+const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+
 export default defineConfig({
   plugins: [react()],
+  define: { __JARVIS_VERSION__: JSON.stringify(version) },
   build: {
     rollupOptions: {
       input: {

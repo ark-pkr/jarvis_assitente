@@ -94,6 +94,6 @@ export function MissionControl({ send }: { send: (prompt: string) => void }) {
       {draftError && <p role="alert">{draftError}</p>}
       <footer className="studio-context"><span>CONTEXTO ATUAL</span><p>{lastQuestion || 'Faça seu pedido por voz. O contexto da conversa acompanha os próximos passos.'}</p></footer>
     </main>}
-    <div className="mission-footer"><span>JARVIS OS <b>1.2.0</b></span><span>{settings.mode === 'tutor' ? 'CONHECIMENTO EM MOVIMENTO' : mode === 'desenvolvimento' ? 'IDEIAS EM CONSTRUÇÃO' : 'SISTEMA PESSOAL DE ASSISTÊNCIA'}</span><div className="mission-footer-actions"><button aria-pressed={settings.sidePanelsVisible} onClick={() => workspace.setSettings({ sidePanelsVisible: !settings.sidePanelsVisible })}>{settings.sidePanelsVisible ? 'Ocultar painéis' : 'Mostrar painéis'}</button><button onClick={() => openSettings('Histórico')}>Histórico e ajustes ↗</button></div></div>
+    <div className="mission-footer"><span>JARVIS OS <b>{__JARVIS_VERSION__}</b></span><span>{settings.mode === 'tutor' ? 'CONHECIMENTO EM MOVIMENTO' : mode === 'desenvolvimento' ? 'IDEIAS EM CONSTRUÇÃO' : 'SISTEMA PESSOAL DE ASSISTÊNCIA'}</span><div className="mission-footer-actions"><button aria-pressed={settings.sidePanelsVisible} onClick={() => workspace.setSettings({ sidePanelsVisible: !settings.sidePanelsVisible })}>{settings.sidePanelsVisible ? 'Ocultar painéis' : 'Mostrar painéis'}</button><button onClick={() => openSettings('Histórico')}>Histórico e ajustes ↗</button></div></div>
   </div>
 }
