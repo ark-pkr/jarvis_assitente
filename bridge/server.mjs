@@ -33,6 +33,8 @@ import { displayServer } from './panels.mjs'
 import { uiServer } from './ui.mjs'
 import { chromeAvailable, chromeServer, browserStatus } from './browser.mjs'
 import { visionServer } from './vision.mjs'
+import { dailyServer } from './daily.mjs'
+import { handleBriefing } from './briefing.mjs'
 import { homedir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -215,6 +217,7 @@ const handleRequest = async (req, res) => {
       browser: await browserStatus() }))
   }
 
+  if (req.method === 'GET' && req.url?.startsWith('/assistant/briefing')) return handleBriefing(req, res, cors)
   if (req.url === '/assistant' || req.url === '/assistant/alerts' || req.url === '/assistant/context' || req.url === '/studio') return handleAssistantRequest(req, res, cors)
   if (req.method === 'GET' && req.url?.startsWith('/lesson-pdf?')) return handleLessonPdf(req, res, cors)
   if (req.method === 'POST' && req.url === '/voice') return handleSpeech(req, res, cors)
@@ -303,11 +306,11 @@ console.log(
  * whatever reaches the client is liable to be spoken.
  */
 const RESULT_FAILURES = {
-  error_during_execution: 'The turn failed part way through.',
-  error_max_turns: 'The turn ran too long and was stopped.',
-  error_max_budget_usd: 'The budget for this turn ran out.',
-  error_max_structured_output_retries: 'The answer could not be assembled.',
-  default: 'The turn ended without an answer.',
+  error_during_execution: 'O pedido falhou no meio do caminho.',
+  error_max_turns: 'O pedido demorou demais e foi interrompido.',
+  error_max_budget_usd: 'O orçamento deste pedido acabou.',
+  error_max_structured_output_retries: 'Não consegui montar a resposta.',
+  default: 'O pedido terminou sem resposta.',
 }
 
 wss.on('connection', (socket) => {
@@ -497,6 +500,7 @@ wss.on('connection', (socket) => {
         jarvis_word: wordServer(ask),
         jarvis_lessons: lessonServer(ask),
         jarvis_assistant: assistantServer(ask),
+        jarvis_daily: dailyServer(),
         // The user's own Chrome, over the extension's native-host socket. It
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.

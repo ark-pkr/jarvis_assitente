@@ -12,11 +12,14 @@ import { useStore } from '../store'
  * Each line is phrased the way you'd actually say it, not as a feature name.
  */
 const EXAMPLES = [
-  'explique como funciona a energia solar',
-  'abra https://www.google.com',
+  'como está o clima hoje?',
+  'pausa a música',
+  'coloca o volume em trinta por cento',
+  'olha minha tela, que erro é esse?',
+  'começar meu dia',
+  'onde eu parei?',
   'deixe a interface azul',
-  'o que você consegue fazer',
-  'resuma nossa conversa',
+  'o que você consegue fazer?',
 ]
 
 const ROTATE_MS = 4200
@@ -32,8 +35,10 @@ export function Suggestions() {
   }, [])
 
   // Only while genuinely idle, and only until the first exchange — once the
-  // user knows how it works, the prompt is just clutter.
-  if (phase !== 'dormant' || turns.length > 0) return null
+  // user knows how it works, the prompt is just clutter. Listening counts as
+  // idle: the app comes up listening, so a dormant-only rule meant this strip
+  // appeared only after someone pressed Escape on an empty conversation.
+  if (!['dormant', 'listening'].includes(phase) || turns.length > 0) return null
 
   return (
     <div className="suggest">

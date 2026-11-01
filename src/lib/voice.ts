@@ -6,6 +6,7 @@ import { caps } from './capabilities'
 import { useWorkspace } from '../workspace'
 import { isExplicitInterruption } from './voiceGuard'
 import { createSpeakerRecognizer, profileFromBase64, scoreSpeaker } from './speakerIdentity'
+import { segmentMaySend, startLocalWake, type LocalWake } from './localWake'
 import type { Eagle, EagleProfile } from '@picovoice/eagle-web'
 
 /**
@@ -350,6 +351,8 @@ export const diag = {
   lastError: '',
   /** Times the wake word matched. */
   wakes: 0,
+  /** Whether "Jarvis" is being detected on this machine. */
+  localWake: false,
   /** Current mode, as the app last reported it. */
   mode: '',
   /** Why the last transcript was ignored — '' when it was accepted. */
@@ -446,6 +449,9 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
   const captureAbort = new AbortController()
   let addressedUntil = 0
   let generation = 0
+  let localWake: LocalWake | null = null
+  /** Whether the segment being captured began inside a follow-up window. */
+  let addressedAtStart = false
 
   /**
    * Segments waiting for the transcriber, oldest first.
@@ -460,7 +466,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
    * Order is preserved because the drain is single-flight, which matters —
    * "London" arriving before "what's the weather in" is worse than either.
    */
-  const pendingAudio: { blob: Blob; generation: number; at: number }[] = []
+  const pendingAudio: { blob: Blob; generation: number; at: number; addressed: boolean }[] = []
   let draining = false
 
   /**
@@ -485,7 +491,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
    * transcript arriving — and the transcript belongs to the mode the user is in
    * now, not the one they interrupted.
    */
-  const transcribe = async ({ blob, generation: captured, at }: { blob: Blob; generation: number; at: number }) => {
+  const transcribe = async ({ blob, generation: captured, at, addressed }: { blob: Blob; generation: number; at: number; addressed: boolean }) => {
     if (captured !== generation || Date.now() - at > 120000) return
     if (stopped || h.mode() === 'deaf') return
     const mode = h.mode()
@@ -595,19 +601,21 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       diag.heardAt = Date.now()
       if (window.jarvisDesktop) {
         if (WAKE.test(said)) {
-          if (Date.now() - lastWake <= WAKE_DEBOUNCE) {
+          // Local detection already answered to the name, so the transcript of
+          // the same breath is the command rather than a second call.
+          if (!localWake && Date.now() - lastWake <= WAKE_DEBOUNCE) {
             drop('wake word repeated too quickly')
             return
           }
           lastWake = Date.now()
-          diag.wakes++
           diag.accepted++
           diag.dropped = ''
           const command = afterWake(said)
-          if (!command) { addressedUntil = Date.now() + 30000; h.onWake(''); return }
+          if (!localWake) diag.wakes++
+          if (!command) { addressedUntil = Date.now() + 30000; if (!localWake) h.onWake(''); return }
           addressedUntil = 0; h.onWake(command); return
         }
-        if (mode !== 'command' || Date.now() > addressedUntil) {
+        if (mode !== 'command' || (Date.now() > addressedUntil && !addressed)) {
           drop('fala não dirigida ao Jarvis'); h.onPartial('Diga “Jarvis” antes do seu pedido.'); return
         }
         addressedUntil = 0
@@ -674,6 +682,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       diag.mode = mode
       diag.sessions++
       if (mode === 'deaf') return
+      addressedAtStart = Date.now() <= addressedUntil
       // Standing down mid-thought throws the thought away with it. Otherwise
       // held text would surface as the opening of the *next* conversation.
       if (mode === 'wake') assemble.cancel()
@@ -686,10 +695,15 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
     onEnd: (blob) => {
       if (stopped) return
       if (['guard', 'deaf'].includes(h.mode())) return
+      if (!segmentMaySend({ localWake: Boolean(localWake), heldText: Boolean(assemble.held()), addressedAtStart, addressedUntil, now: Date.now() })) {
+        drop('sem a palavra de ativação; nada foi enviado')
+        return
+      }
       if (pendingAudio.length >= 2) { pendingAudio.length = 0; generation++; return }
-      pendingAudio.push({ blob, generation, at: Date.now() })
+      pendingAudio.push({ blob, generation, at: Date.now(), addressed: addressedAtStart })
       void drain()
     },
+    onAudio: (samples, rate) => localWake?.feed(samples, rate),
     onLevel: (v) => {
       // Only paint the live level while actually listening for a command, so a
       // dormant reactor stays calm and does not twitch at every room noise.
@@ -708,6 +722,32 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
     },
   })
   diag.running = vad.live()
+
+  /**
+   * His name, heard on this machine. Started after the capture is up and never
+   * awaited by it: an invalid key or a dead network costs this feature alone,
+   * and the transcription path keeps working exactly as it did.
+   */
+  const heardName = () => {
+    const mode = h.mode()
+    if (stopped || mode === 'deaf' || Date.now() - lastWake <= WAKE_DEBOUNCE) return
+    if (mode === 'guard' && /jarv/i.test(speakingNow())) return
+    lastWake = Date.now()
+    diag.wakes++
+    addressedUntil = Date.now() + 30000
+    addressedAtStart = true
+    if (mode === 'guard') h.onSpeechStart()
+    else if (mode === 'wake') h.onWake('')
+  }
+  const wakeKey = window.jarvisDesktop ? await window.jarvisDesktop.wakeKey().catch(() => '') : ''
+  if (wakeKey) void startLocalWake(wakeKey, heardName).then((engine) => {
+    if (stopped) engine.stop()
+    else { localWake = engine; diag.localWake = true }
+  }).catch((error) => {
+    console.warn('[jarvis] local wake word unavailable:', error)
+    diag.lastError = 'palavra de ativação local indisponível'
+    h.onError('Não foi possível iniciar a detecção local de “Jarvis”. Confira a chave Picovoice; por enquanto, a transcrição continua pelo Gemini.')
+  })
 
   // Raise the trigger bar exactly while he speaks. The mode is polled rather
   // than pushed because nothing in the app pushes phase changes here, and a
@@ -737,6 +777,9 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       clearInterval(guardPoll)
       assemble.cancel()
       vad?.stop()
+      localWake?.stop()
+      localWake = null
+      diag.localWake = false
       void speakerRecognizer?.release()
       speakerRecognizer = null
       speakerProfile = null

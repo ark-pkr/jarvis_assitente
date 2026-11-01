@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 
+/** How long App holds the boot overlay up, by which opening is playing. */
+export const BOOT_MS = { full: 9200, short: 2300 }
+
 export type Phase =
   | 'offline'   // waiting for the click that unlocks audio
   | 'boot'      // startup sequence
@@ -230,6 +233,8 @@ type State = {
   looking: string | null
   /** Transient status line during boot, e.g. the voice model download. */
   bootNote: string
+  /** Whether this power-on plays the short opening rather than the full one. */
+  bootShort: boolean
   /** Cards currently on the display, newest last. */
   panels: Panel[]
   /** Blades currently open, newest last — which is also front-most. */
@@ -245,6 +250,7 @@ type State = {
   setGestures: (on: boolean) => void
   setLooking: (why: string | null) => void
   setBootNote: (n: string) => void
+  setBootShort: (short: boolean) => void
   pushPanel: (p: Panel) => void
   clearPanels: () => void
   pushBlade: (b: Blade) => void
@@ -286,12 +292,14 @@ export const useStore = create<State>((set) => ({
   focusedBlade: null,
   expandedBlade: null,
   bootNote: '',
+  bootShort: false,
   ui: defaultUi(),
 
   setVoice: (voice) => set({ voice }),
   setGestures: (gestures) => set({ gestures }),
   setLooking: (looking) => set({ looking }),
   setBootNote: (bootNote) => set({ bootNote }),
+  setBootShort: (bootShort) => set({ bootShort }),
   // Three is as many as fits around the reactor without crowding it. Sticky
   // panels are exempt from the cull — the tool description promises they stay
   // until replaced, and a plain slice(-3) silently evicted them the moment a

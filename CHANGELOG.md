@@ -1,5 +1,29 @@
 # Histórico de versões
 
+## 1.4.0
+
+**Presença**
+- A esfera mostra o estado da conversa: encolhe e acompanha a voz ao ouvir, corre sinais ao pensar, varre as órbitas ao usar uma ferramenta e solta ondas ao falar. Agora obedece aos pedidos de cor.
+- Cumprimento ao iniciar, com lembretes, tarefas, próximo passo e clima uma vez por dia, montado localmente, sem chamar o modelo.
+- Abertura completa só na primeira vez; as seguintes levam cerca de 3 segundos em vez de 10.
+- Opções “ativar sozinho ao abrir” e “bater palma para ativar” no aplicativo, ambas desligadas por padrão.
+- Atalho global, Ctrl+Alt+J por padrão, e mini esfera flutuante enquanto a janela não está em foco.
+- Confirmações trazem a janela de volta sozinhas e a devolvem como estava.
+
+**Novos comandos**
+- “Olha minha tela”: captura com confirmação a cada vez, sem a janela do JARVIS na frente.
+- Clima pelo Open-Meteo, teclas de mídia e volume do Windows.
+
+**Privacidade**
+- Palavra de ativação local com Porcupine: com uma chave Picovoice, o que não vem depois de “Jarvis” não sai do computador, e dizer “Jarvis” interrompe uma resposta.
+
+**Acabamento**
+- Corrigidas sobreposições na tela principal, no boot e no HELIOS, que agora começa com o painel recolhido e entrega título e status à interface.
+- Boot em português e dourado no modo Assistente, com etapas reais no lugar do texto inventado.
+- Sugestões de comando visíveis ao iniciar e legenda ao vivo na tela, que nunca aparecia.
+- Mensagens de erro e guia de gestos em português.
+- `JARVIS_BRIDGE_PORT` passou a funcionar: a política de segurança da página seguia presa à porta 8787.
+
 ## 1.3.0
 
 **Privacidade e segurança**

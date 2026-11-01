@@ -3,14 +3,16 @@ import type { Turn } from './store'
 
 export type Conversation = { id: string; title: string; updated: number; turns: Turn[] }
 export type HeliosSettings = { paused: boolean; speed: number; glow: number; separation: number; color: 'gold' | 'cyan' | 'violet' | 'emerald' | 'rose'; quality: 'auto' | 'eco' | 'balanced' | 'ultra'; bloom: boolean; autoRotate: boolean; introOnStartup: boolean; cinema: boolean; introSequence: number }
-export type Settings = { inputDeviceId: string; music: number; voiceVolume: number; voiceRate: number; fast: boolean; remember: boolean; lightVisuals: boolean; visualTheme: 'sphere' | 'reactor' | 'helios'; helios: HeliosSettings; speechPause: number; experienceVersion: number; naturalVoice: boolean; neuralVoice: string; newsTopics: string; voiceIdentityRequired: boolean; speakerThreshold: number; mode: 'assistente' | 'desenvolvimento' | 'analise' | 'tutor'; activityProfile: 'pessoal' | 'trabalho' | 'estudo' | 'descanso'; privacyMode: boolean; sidePanelsVisible: boolean }
+export type Settings = { inputDeviceId: string; music: number; voiceVolume: number; voiceRate: number; fast: boolean; remember: boolean; lightVisuals: boolean; visualTheme: 'sphere' | 'reactor' | 'helios'; helios: HeliosSettings; speechPause: number; experienceVersion: number; naturalVoice: boolean; neuralVoice: string; newsTopics: string; voiceIdentityRequired: boolean; speakerThreshold: number; mode: 'assistente' | 'desenvolvimento' | 'analise' | 'tutor'; activityProfile: 'pessoal' | 'trabalho' | 'estudo' | 'descanso'; privacyMode: boolean; sidePanelsVisible: boolean; bootSeen: boolean; fullBoot: boolean; greeting: boolean; briefingDay: string; city: string }
 type SettingsPatch = Partial<Omit<Settings, 'helios'>> & { helios?: Partial<HeliosSettings> }
 export type Learning = { level: string; minutes: number; topic: string; goal: string; completed: string[]; pdfFolder: string; pdfFile: string; pdfTopic: string; pageFrom: number; pageTo: number; exampleTarget: 'word' | 'vscode'; exampleFolder: string; exampleFile: string }
 const learningDefaults: Learning = { level: 'Iniciante', minutes: 30, topic: 'logica', goal: '', completed: [], pdfFolder: '', pdfFile: '', pdfTopic: '', pageFrom: 1, pageTo: 3, exampleTarget: 'word', exampleFolder: '', exampleFile: 'aula-exemplo.py' }
 const key = 'jarvis.workspace.v1'
+/** The floating orb shares this origin's storage but none of its state. */
+const mirrorWindow = new URLSearchParams(location.search).has('mini')
 const fresh = (): Conversation => ({ id: crypto.randomUUID(), title: 'Nova conversa', updated: Date.now(), turns: [] })
 const initial = fresh()
-const defaults: Settings = { inputDeviceId: '', music: .04, voiceVolume: 1, voiceRate: 1.25, fast: true, remember: true, lightVisuals: true, visualTheme: 'sphere', helios: { paused: false, speed: 1, glow: 1, separation: 0, color: 'gold', quality: 'auto', bloom: true, autoRotate: true, introOnStartup: true, cinema: false, introSequence: 0 }, speechPause: .8, experienceVersion: 9, naturalVoice: true, neuralVoice: 'Charon', newsTopics: '', voiceIdentityRequired: false, speakerThreshold: .72, mode: 'assistente', activityProfile: 'pessoal', privacyMode: false, sidePanelsVisible: false }
+const defaults: Settings = { inputDeviceId: '', music: .04, voiceVolume: 1, voiceRate: 1.25, fast: true, remember: true, lightVisuals: true, visualTheme: 'sphere', helios: { paused: false, speed: 1, glow: 1, separation: 0, color: 'gold', quality: 'auto', bloom: true, autoRotate: true, introOnStartup: true, cinema: false, introSequence: 0 }, speechPause: .8, experienceVersion: 9, naturalVoice: true, neuralVoice: 'Charon', newsTopics: '', voiceIdentityRequired: false, speakerThreshold: .72, mode: 'assistente', activityProfile: 'pessoal', privacyMode: false, sidePanelsVisible: false, bootSeen: false, fullBoot: false, greeting: true, briefingDay: '', city: '' }
 let saved: { sessions?: Conversation[]; active?: string; memory?: string; settings?: Settings; learning?: Learning } = {}
 try { saved = JSON.parse(localStorage.getItem(key) || '{}') } catch { /* recover with empty workspace */ }
 // Apply the requested clearer audio and balanced reasoning once, preserving later adjustments.
@@ -82,6 +84,9 @@ export const useWorkspace = create<Workspace>((set, get) => ({
 let timer: ReturnType<typeof setTimeout> | undefined
 export function flushWorkspace() {
   clearTimeout(timer)
+  // Its snapshot went stale the moment it loaded, and writing it back would
+  // overwrite everything the main window saved since.
+  if (mirrorWindow) return
   const { sessions, active, memory, settings, learning } = useWorkspace.getState()
   if (settings.privacyMode) return
   try {
@@ -108,7 +113,8 @@ export function conversationContext() {
     estudo: 'Priorize aprendizagem ativa, explicações adaptadas e revisão espaçada.',
     descanso: 'Use tom tranquilo e só proponha tarefas quando o usuário pedir.',
   }
-  const profile = `Modo solicitado: ${state.settings.mode}. ${modes[state.settings.mode] || modes.assistente}\nPerfil de atividade: ${state.settings.activityProfile}. ${activityProfiles[state.settings.activityProfile]}\nEstudos: nível ${state.learning.level}; ${state.learning.minutes} minutos por dia; tema ${state.learning.topic}; objetivo ${state.learning.goal}. Tópicos marcados pelo usuário: ${state.learning.completed.join(', ')}.`
+  const city = state.settings.city.trim() ? `\nCidade padrão para o clima: ${state.settings.city.trim()}.` : ''
+  const profile = `Modo solicitado: ${state.settings.mode}. ${modes[state.settings.mode] || modes.assistente}\nPerfil de atividade: ${state.settings.activityProfile}. ${activityProfiles[state.settings.activityProfile]}\nEstudos: nível ${state.learning.level}; ${state.learning.minutes} minutos por dia; tema ${state.learning.topic}; objetivo ${state.learning.goal}. Tópicos marcados pelo usuário: ${state.learning.completed.join(', ')}.${city}`
   const privacy = state.settings.privacyMode
     ? 'Modo privacidade ativo: não use memória pessoal nem histórico de conversa. Pedidos digitados ainda usam o serviço de IA configurado. Não pesquise na web a menos que o usuário peça explicitamente.'
     : ''

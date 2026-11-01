@@ -11,6 +11,8 @@ await fs.writeFile(path.join(destination, 'package.json'), JSON.stringify({ name
 const eagleModel = await fs.readFile(path.join(root, 'public', 'eagle_params.pv'))
 const eagleBlobHash = createHash('sha1').update(`blob ${eagleModel.length}\0`).update(eagleModel).digest('hex')
 if (eagleModel.length !== 4658658 || eagleBlobHash !== 'a9b518b56c447cd5b30f6bd730e54c12a0796c0d') throw new Error('O modelo Picovoice Eagle não corresponde à versão licenciada e fixada.')
+const porcupineModel = await fs.readFile(path.join(root, 'public', 'porcupine_params.pv'))
+if (createHash('sha1').update(porcupineModel).digest('hex') !== '6715b649413324c1d858f2640c907cd14cfa9201') throw new Error('O modelo Picovoice Porcupine não corresponde à versão fixada.')
 await fs.mkdir(path.join(destination, 'licenses'), { recursive: true })
 await fs.copyFile(path.join(root, 'licenses', 'PICOVOICE-APACHE-2.0.txt'), path.join(destination, 'licenses', 'PICOVOICE-APACHE-2.0.txt'))
 for (const directory of ['desktop', 'bridge', 'dist']) {

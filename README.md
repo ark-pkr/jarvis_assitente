@@ -1,6 +1,6 @@
 # J.A.R.V.I.S.
 
-Assistente pessoal por voz para Windows, em português do Brasil, com interface holográfica. Conversa, pesquisa na web, dá aulas a partir dos seus PDFs, escreve no Word, cria e revisa projetos e organiza arquivos. O cérebro é a API Gemini; toda ação que muda algo pede sua confirmação na tela.
+Assistente pessoal por voz para Windows, em português do Brasil, com interface holográfica. Conversa, pesquisa na web, dá aulas a partir dos seus PDFs, escreve no Word, cria e revisa projetos e organiza arquivos. O cérebro é a API Gemini; toda ação que muda algo pede sua confirmação na tela, exceto música e volume, que seriam inúteis com uma pergunta na frente.
 
 O histórico de cada versão está em [CHANGELOG.md](CHANGELOG.md).
 
@@ -28,10 +28,27 @@ Requisitos opcionais: Chrome para navegar e pesquisar, Word e VS Code para as in
 | **V** | Alterna a voz |
 | **T** | Testa o som |
 | **D** | Abre o painel de diagnóstico |
+| **G** | Liga ou desliga a câmera e o controle por gestos |
+| **Ctrl+Alt+J** | Chama o JARVIS de dentro de qualquer programa (troque em **Aplicativo**) |
+
+Ao iniciar, ele cumprimenta; uma vez por dia, o cumprimento traz lembretes, tarefas, o próximo passo e o clima, se houver cidade na **Central**. A abertura completa só toca na primeira vez, e **Áudio** tem a opção de repeti-la sempre.
 
 Após uma resposta, há 15 segundos para continuar sem repetir o nome. Diga **“resposta rápida”** ou **“investigue melhor”** para escolher o ritmo daquele pedido.
 
 ## O que o JARVIS faz
+
+**Sempre por perto.** Em **Aplicativo** você encontra as opções abaixo. As duas primeiras vêm desligadas porque abrem o microfone sem ninguém clicar.
+
+- **Ativar sozinho ao abrir:** liga sem clique. Ao entrar no Windows, sobe em segundo plano, com a janela fechada.
+- **Bater palma para ativar:** o microfone fica aberto na tela inicial só para medir o som. Nada sai do computador até ele ligar.
+- **Mini esfera:** quando a janela não está em foco, uma esfera pequena no canto mostra o que ele está fazendo. Clique nela para abrir a janela.
+- **Atalho global:** funciona em qualquer programa.
+
+**Palavra de ativação no computador.** Sem isso, tudo que o microfone capta vai ao Gemini para saber se você chamou o JARVIS. Com uma chave gratuita do [Picovoice](https://console.picovoice.ai/) em **Aplicativo**, ou a mesma da proteção de voz, “Jarvis” é detectado localmente e só o que vier depois sai do computador. Durante uma resposta, dizer “Jarvis” também o interrompe.
+
+**Olhar a tela.** Diga “olha minha tela, que erro é esse?”. Cada captura pede sua confirmação e mostra o motivo. A janela do JARVIS sai da frente, a imagem da tela onde está o cursor vai ao Gemini e não fica salva. Só funciona no aplicativo. Feche antes o que não quiser mostrar.
+
+**Clima, música e volume.** Pergunte o clima de qualquer cidade (dados do [Open-Meteo](https://open-meteo.com/), sem chave) e diga a cidade padrão em **Central**. “Pausa a música”, “próxima faixa” e “volume em trinta” funcionam sem confirmação. As teclas de mídia agem no player que o Windows considerar ativo.
 
 **Modos.** O seletor no topo alterna entre Assistente, Professor e Desenvolvedor. Em **Aprender** também há análise de sistemas, nível, tempo diário e objetivo.
 
@@ -62,9 +79,11 @@ docker pull rust:1.87-slim
 
 **Biblioteca.** Busca texto nas pastas autorizadas com referência de página ou linha. Cada busca dura até 12 segundos, com limite de 30 arquivos, três níveis e dez páginas por PDF.
 
+**Gestos.** Pressione **G** para ligar a câmera e controlar os painéis com as mãos. O guia aparece na tela. O modelo de rastreamento é baixado do Google na primeira vez.
+
 **Voz.** Escolha entre Charon, Orus, Kore e Puck em **Áudio**, com velocidade até 1,8×. Ajuste a pausa de captura se o fim das frases for cortado. A proteção de voz opcional usa uma chave pessoal do [Picovoice](https://console.picovoice.ai/) e roda localmente, mas não substitui autenticação de segurança.
 
-**Visual.** Em **Áudio → Visual holográfico**, escolha a esfera neural (padrão, mais leve), o reator circular ou o reator HELIOS. Peça “mude o HELIOS para azul” ou “ative o modo cinema”.
+**Visual.** Em **Áudio → Visual holográfico**, escolha a esfera neural (padrão, mais leve), o reator circular ou o reator HELIOS. Peça “mude o HELIOS para azul” ou “ative o modo cinema”. A esfera mostra o estado da conversa: encolhe e acompanha sua voz ao ouvir, corre sinais azulados ao pensar, varre as órbitas ao usar uma ferramenta e solta ondas ao falar. “Deixe a interface azul” muda a esfera também.
 
 **VS Code.** Instale a extensão local com `powershell -File scripts/install-vscode-extension.ps1` e recarregue a janela. Os comandos **JARVIS: Compartilhar seleção** e **JARVIS: Compartilhar diagnósticos** pedem confirmação, e os dados expiram em 15 minutos. Só são lidos se os arquivos estiverem em uma pasta autorizada.
 
@@ -72,7 +91,7 @@ docker pull rust:1.87-slim
 
 ## Privacidade e segurança
 
-- **O que sai do computador:** sua fala vai ao Gemini para transcrição. Pedidos, as últimas 40 mensagens da conversa, suas preferências, até oito registros de perfil, projeto e estudo e os arquivos lidos também vão ao Gemini. Excluir dados locais não apaga registros mantidos pelo provedor.
+- **O que sai do computador:** sua fala vai ao Gemini para transcrição, ou só o que vier depois de “Jarvis” com a detecção local ligada. A imagem da tela vai quando você autoriza. Pedidos, as últimas 40 mensagens da conversa, suas preferências, até oito registros de perfil, projeto e estudo e os arquivos lidos também vão ao Gemini. Excluir dados locais não apaga registros mantidos pelo provedor.
 - **Modo privacidade:** interrompe o microfone, não envia memória, registros nem histórico, não grava novas conversas e desliga pesquisa web e integrações remotas naquele pedido. Pedidos digitados ainda usam a IA.
 - **Serviço local:** escuta somente em `127.0.0.1`. No aplicativo, cada sessão tem um token próprio.
 - **Navegador:** o JARVIS usa um Chrome com perfil próprio, que não acessa suas abas pessoais. Senhas são digitadas por você. Clicar e preencher sempre pedem confirmação. Abrir uma URL que não veio do seu pedido nem da pesquisa também pede, para que uma página não induza o envio de dados a outro site.
@@ -104,6 +123,8 @@ navegador ou Electron  ⇄  bridge/server.mjs (WebSocket e HTTP em 127.0.0.1)
                              ├─ prompt.mjs    instruções por modo e assunto
                              ├─ policy.mjs    o que cada ferramenta pode fazer
                              ├─ browser.mjs   Chrome dedicado
+                             ├─ daily.mjs     clima, música e volume
+                             ├─ briefing.mjs  cumprimento ao iniciar
                              └─ media-routes / speech-routes
 ```
 
@@ -113,6 +134,7 @@ navegador ou Electron  ⇄  bridge/server.mjs (WebSocket e HTTP em 127.0.0.1)
 | `npm run lint` | Lint |
 | `npm run build` | Tipos e build da interface |
 | `npm run test:ui`, `test:voice`, `test:assistant-ui` e outros `test:*` | Verificações com o app aberto; alguns consomem a API |
+| `npm run test:presence` | Ativação sozinho, atalho, mini esfera e captura de tela no aplicativo real, sem usar a API |
 | `npm run desktop:dist` | Gera o instalador em `release/` |
 
 | Variável | Padrão | Efeito |

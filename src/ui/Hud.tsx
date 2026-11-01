@@ -167,6 +167,7 @@ export function Hud() {
   const bootNote = useStore((s) => s.bootNote)
   const gestures = useStore((s) => s.gestures)
   const looking = useStore((s) => s.looking)
+  const caption = useStore((s) => s.caption)
   const ui = useStore((s) => s.ui)
 
   // accentFor folds JARVIS's overrides in over the phase colour, so one
@@ -298,10 +299,11 @@ export function Hud() {
 
       {ui.chrome.suggestions && <Suggestions />}
 
+      {caption && caption !== '…' && <div className="live-caption" role="status">{caption}</div>}
+
       {error && <div className="error" role="alert">{error}</div>}
 
-
-      <footer className="hud-bottom">
+      {phase !== 'offline' && <footer className="hud-bottom">
         <span className="hint">
           conversa por voz · <kbd>Esc</kbd> colocar em espera · <kbd>Espaço</kbd> ativar · <kbd>G</kbd> gestos
           {voice && (
@@ -311,7 +313,7 @@ export function Hud() {
             </>
           )}
         </span>
-      </footer>
+      </footer>}
 
       {/* Last, so a flash or a tear reads as being on the glass rather than
           underneath the chrome. It is pointer-events: none and unmounts the

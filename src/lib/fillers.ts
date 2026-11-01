@@ -94,6 +94,8 @@ type Rule = {
 const FOOTAGE = ['Montando o vídeo.', 'Renderizando a sequência.']
 
 const BY_TOOL: Rule[] = [
+  { tool: /weather/, lines: ['Vendo a previsão.', 'Consultando o clima.'] },
+  { tool: /screen_look/, lines: ['Olhando sua tela.'] },
   // Video sits above image because higgsfield and palmier both do either, so
   // the verb in the tool name is the only thing separating them — a rule on the
   // server alone would send every generate_video to "Rendering."

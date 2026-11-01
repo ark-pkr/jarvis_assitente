@@ -23,19 +23,28 @@ import { useStore } from '../store'
  *  overlay dissolves; App owns the actual hand-off, this is only for pacing. */
 const T = { rings: 2600, suit: 5200, reactor: 7200 }
 
+/**
+ * After the first time the opening is a greeting, not a performance: rings and
+ * reactor only. Nobody wants nine seconds of ceremony on every launch.
+ */
+const SHORT = { reactor: 1100 }
+
+// The steps App really runs, in the order it runs them. No invented results:
+// nothing here claims a check passed, because nothing here performs one.
 const LOG = [
-  'MOUNT F:/BACKUP/GHOST (HIDDEN)',
-  'EXTEND SYSTEM MEMORY .......... OK',
-  'TELEMETRY / COMP CLIMATION',
-  'REMOVE SYSTEM CONFIGURATION',
-  'CHECKSUM ...................... OK',
-  'RUN SYSTEM TOOL',
+  'LIBERANDO ÁUDIO',
+  'ABRINDO O SERVIÇO LOCAL',
+  'CARREGANDO FERRAMENTAS',
+  'CARREGANDO MEMÓRIA E PREFERÊNCIAS',
+  'PREPARANDO A VOZ',
+  'ABRINDO O MICROFONE',
 ]
 
 type Stage = 'bar' | 'rings' | 'suit' | 'reactor'
 
 export function Boot() {
   const phase = useStore((s) => s.phase)
+  const short = useStore((s) => s.bootShort)
   const reduced = useReducedMotion()
   const [t, setT] = useState(0)
 
@@ -60,8 +69,10 @@ export function Boot() {
 
   if (phase !== 'boot') return null
 
-  const stage: Stage =
-    t >= T.reactor ? 'reactor' : t >= T.suit ? 'suit' : t >= T.rings ? 'rings' : 'bar'
+  const stage: Stage = short
+    ? t >= SHORT.reactor ? 'reactor' : 'rings'
+    : t >= T.reactor ? 'reactor' : t >= T.suit ? 'suit' : t >= T.rings ? 'rings' : 'bar'
+  const reactorStart = short ? SHORT.reactor : T.reactor
 
   const logShown = Math.min(LOG.length, Math.floor((t / T.rings) * (LOG.length + 1)))
   const barPct = Math.min(1, t / (T.rings - 300))
@@ -75,10 +86,10 @@ export function Boot() {
         transition={{ duration: 0.8 }}
       >
         {/* ---- beat 1: the status bar, dimming once its work is done ---- */}
-        <div className={`boot-bar ${stage !== 'bar' ? 'boot-bar-dim' : ''}`}>
+        {!short && <div className={`boot-bar ${stage !== 'bar' ? 'boot-bar-dim' : ''}`}>
           <div className="boot-bar-frame">
             <span className="boot-bar-title">
-              INITIATING SYSTEM 1<span className="boot-dots">…</span>
+              INICIANDO O SISTEMA<span className="boot-dots">…</span>
               <span className="boot-cursor" />
             </span>
             <div className="boot-seg">
@@ -98,13 +109,13 @@ export function Boot() {
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* ---- beats 2-4: the centre stage ---- */}
         <div className="boot-stage">
           {stage === 'rings' && <Rings reduced={!!reduced} />}
           {stage === 'suit' && <Suit reduced={!!reduced} />}
-          {stage === 'reactor' && <Reactor reduced={!!reduced} t={t - T.reactor} />}
+          {stage === 'reactor' && <Reactor reduced={!!reduced} t={t - reactorStart} />}
         </div>
       </motion.div>
     </AnimatePresence>
@@ -201,8 +212,8 @@ function Suit({ reduced }: { reduced: boolean }) {
           />
         </motion.g>
       ))}
-      <text x="-150" y="34" className="boot-tag">RT / PWR</text>
-      <text x="150" y="34" className="boot-tag">DEP / MK</text>
+      <text x="-150" y="34" className="boot-tag">ENERGIA</text>
+      <text x="150" y="34" className="boot-tag">SISTEMAS</text>
     </svg>
   )
 }

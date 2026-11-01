@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../workspace'
-import { useStore } from '../store'
+import { useStore, type Phase } from '../store'
 import { BRIDGE_HTTP_URL } from '../config'
 import { openResearchLink, sanitisePanelHtml } from './sanitise'
 import './mission-control.css'
@@ -10,6 +10,7 @@ type Activity = { id: string; title: string; status: string; notes: string }
 type Draft = { code: string; filename: string; rootId: string; notes: string }
 const openSettings = (tab: string) => window.dispatchEvent(new CustomEvent('jarvis:settings', { detail: tab }))
 const modes = [{ id: 'assistente', label: 'Assistente', index: '01', description: 'Conversa · arquivos · rotinas' }, { id: 'tutor', label: 'Professor', index: '02', description: 'Aprender · praticar · evoluir' }, { id: 'desenvolvimento', label: 'Desenvolvedor', index: '03', description: 'Código · revisão · projetos' }] as const
+const phaseLine: Record<Phase, string> = { offline: 'AGUARDANDO INÍCIO', boot: 'INICIANDO', dormant: 'EM ESPERA', waking: 'ESCUTA ATIVA', listening: 'ESCUTA ATIVA', thinking: 'PROCESSANDO', tooling: 'CONSULTANDO FERRAMENTAS', speaking: 'RESPONDENDO' }
 function initialDraft(): Draft { try { return { code: '', filename: 'exemplo.py', rootId: '', notes: '', ...JSON.parse(localStorage.getItem('jarvis.studio.v1') || '{}') } } catch { return { code: '', filename: 'exemplo.py', rootId: '', notes: '' } } }
 function PanelMaterial() {
   const panels = useStore((s) => s.panels)
@@ -75,7 +76,7 @@ export function MissionControl({ send }: { send: (prompt: string) => void }) {
         <section className="tech-card"><header><span>01 / CONEXÕES</span><i /></header><h3>Todos os sistemas,<br/><em>ao seu alcance.</em></h3><p>{connected.length ? `${connected.length} integrações disponíveis nesta sessão.` : 'As integrações aparecem ao conectar o assistente.'}</p><div className="connection-grid">{['Conversa', 'Arquivos', 'Word', 'VS Code'].map((name) => <span key={name}><i />{name}</span>)}</div><button onClick={() => openSettings('Conexões')}>Ver conexões ↗</button></section>
         <section className="tech-card"><header><span>02 / ATALHOS</span><i /></header><div className="deck-actions"><button onClick={() => openSettings('Computador')}>↗ Aplicativos</button><button onClick={() => openSettings('Arquivos')}>▤ Meus arquivos</button><button onClick={() => openSettings('Central')}>◷ Rotinas e tarefas</button><button onClick={() => { openSettings('Central'); send(`Comece meu dia: consulte local_time e assistant_overview para me dizer compromissos, tarefas e lembretes de hoje. ${workspace.settings.newsTopics.trim() ? `Pesquise notícias atuais sobre estes assuntos: ${JSON.stringify(workspace.settings.newsTopics)}. Compare fontes e mostre links citáveis em um painel.` : 'Não pesquise notícias sem assuntos configurados; pergunte se quero definir temas para o briefing diário.'} Seja breve e não crie nem altere registros.`) }}>☼ Começar meu dia</button><button onClick={() => send('Consulte assistant_overview e diga onde parei nos meus projetos e estudos, com o próximo passo. Não invente progresso.')}>↳ Onde eu parei?</button></div></section>
       </aside>
-      <div className="reactor-caption"><span>INTERFACE DE INTELIGÊNCIA PESSOAL</span><h1>J.A.R.V.I.S.</h1><p>Uma conversa. Infinitas possibilidades.</p><div className="reactor-coordinate">NÚCLEO CENTRAL <i /> CONTROLE POR VOZ</div></div>
+      <div className="reactor-caption"><span>INTERFACE DE INTELIGÊNCIA PESSOAL</span><h1>J.A.R.V.I.S.</h1><p>Uma conversa. Infinitas possibilidades.</p><div className="reactor-coordinate" data-phase={phase}>{phaseLine[phase]}</div></div>
       <aside className="mission-column mission-right">
         <ClockCard />
         <section className="tech-card"><header><span>CAPTURA DE VOZ</span><i /></header><MicSpectrum/><p>{phase === 'listening' ? 'Diga “Jarvis” e faça seu pedido.' : phase === 'speaking' ? 'Respondendo. Espaço para interromper.' : phase === 'offline' ? 'Inicie o JARVIS para ativar o microfone.' : activeTool ? 'Consultando uma ferramenta.' : 'O estado da conversa aparece no topo.'}</p><button onClick={() => openSettings('Áudio')}>Ajustar microfone ↗</button></section>

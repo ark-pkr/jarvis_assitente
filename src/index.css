@@ -1015,13 +1015,29 @@ kbd {
 
 /* ------------------------------------------------------------------- boot */
 
+/* The floating orb: a transparent window holding nothing but the sphere. */
+html[data-mini], html[data-mini] body, html[data-mini] #root { background: transparent !important; overflow: hidden; }
+html[data-mini] body::after { display: none; }
+.mini-orb { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 0; border: 0; background: none; color: #ffe4ae; cursor: pointer; font: 11px 'Chakra Petch', 'Segoe UI', sans-serif; }
+.mini-orb .neural-sphere-canvas { position: static; width: 190px; height: 190px; }
+.mini-label { max-width: 178px; padding: 3px 10px; overflow: hidden; border-radius: 10px; background: #0b0705d9; text-overflow: ellipsis; white-space: nowrap; }
+.mini-label:empty { display: none; }
+
+/* Above mission control, which is z-index 8 and otherwise sits on the title. */
 .boot {
+  --boot-ink: #eafcff;
   position: fixed;
   inset: 0;
-  z-index: 6;
+  z-index: 30;
   background: var(--bg);
   color: var(--accent);
   overflow: hidden;
+}
+/* Assistant mode is the gold interface, so its opening is gold as well. */
+html[data-workspace-mode='assistente'] .boot {
+  --accent: #ffb347;
+  --boot-ink: #fff1d6;
+  background: radial-gradient(ellipse at 50% 45%, #160b05 0, #070503 39%, #020202 74%);
 }
 
 /* -- beat 1: the status bar -------------------------------------------- */
@@ -1054,7 +1070,7 @@ kbd {
   font-size: clamp(18px, 3.4vw, 40px);
   font-weight: 300;
   letter-spacing: 0.14em;
-  color: #eafcff;
+  color: var(--boot-ink);
   text-shadow: 0 0 26px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 .boot-dots { opacity: 0.6; margin: 0 0.2em; }
@@ -1117,7 +1133,7 @@ kbd {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 50%, transparent));
 }
 .boot-name {
-  fill: #eafcff;
+  fill: var(--boot-ink);
   font-family: 'JetBrains Mono', monospace;
   font-size: 20px;
   text-anchor: middle;
@@ -1146,7 +1162,7 @@ kbd {
   stroke: color-mix(in srgb, var(--accent) 30%, transparent);
   stroke-width: 8;
 }
-.boot-r-on { stroke: #dffbff; filter: drop-shadow(0 0 8px var(--accent)); }
+.boot-r-on { stroke: var(--boot-ink); filter: drop-shadow(0 0 8px var(--accent)); }
 .boot-r-ring {
   fill: none;
   stroke: var(--accent);
@@ -1156,13 +1172,13 @@ kbd {
 .boot-r-ring-in { stroke-width: 1.5; opacity: calc(0.2 + var(--glow) * 0.5); }
 .boot-r-tri {
   fill: color-mix(in srgb, var(--accent) calc(var(--glow) * 45%), transparent);
-  stroke: #eafcff;
+  stroke: var(--boot-ink);
   stroke-width: 3;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 calc(var(--glow) * 26px) var(--accent));
 }
 .boot-r-tri-in {
-  fill: color-mix(in srgb, #eafcff calc(var(--glow) * 60%), transparent);
+  fill: color-mix(in srgb, var(--boot-ink) calc(var(--glow) * 60%), transparent);
   stroke: none;
 }
 .boot-r-v {

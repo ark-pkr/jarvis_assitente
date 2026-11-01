@@ -46,13 +46,17 @@
 .mission-spectrum small { font-size: 7px; color: #618c9f; margin-top: 4px; letter-spacing: .1em; }
 .tech-card .activity-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .state-chip { display: inline-block; padding: 4px 6px; font: 8px 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .07em; color: #8ed3e5; border: 1px solid #285469; background: #0a2736; }
-.reactor-caption { position: absolute; top: calc(100vh - 450px); left: 50%; transform: translateX(-50%); width: 420px; text-align: center; align-self: end; color: #93bed0; }
+.reactor-caption { position: absolute; top: calc(100vh - 455px); left: 50%; transform: translateX(-50%); width: 420px; text-align: center; align-self: end; color: #93bed0; }
 .mission-control[data-has-conversation='true'] .reactor-caption { display: none; }
 .reactor-caption > span { font: 7px 'JetBrains Mono', monospace; letter-spacing: .25em; color: #5d92ab; }
 .reactor-caption h1 { font-size: 24px; margin: 7px 0 3px; color: #d9f4ff; font-weight: 400; letter-spacing: .37em; text-indent: .37em; }
 .reactor-caption p { margin: 4px 0 16px; font-size: 11px; }
 .reactor-coordinate { font: 7px 'JetBrains Mono', monospace; letter-spacing: .15em; }
-.reactor-coordinate i { display: inline-block; width: 20px; border-top: 1px solid #5496b2; vertical-align: middle; margin: 0 12px; }
+.reactor-coordinate[data-phase='thinking'], .reactor-coordinate[data-phase='tooling'] { color: #8fd8ff; }
+.reactor-coordinate[data-phase='speaking'] { color: #fff1d6; }
+/* Below this the sphere reaches down to where the caption sits. The HUD status
+   and the sphere itself already say the same thing. */
+@media (max-height: 790px) { .reactor-caption { display: none; } }
 .mission-footer { position: absolute; left: 40px; right: 40px; bottom: 14px; height: 28px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #35627755; padding-top: 12px; font: 8px 'JetBrains Mono', monospace; letter-spacing: .13em; color: #60879a; }
 .mission-footer b { font-weight: 400; color: #9dcede; margin-left: 8px; }
 .mission-footer button { pointer-events: auto; border: none; background: none; padding: 0; font-size: 9px; letter-spacing: 0; color: #9dcede; }
@@ -60,9 +64,14 @@
 html[data-workspace-mode] .hud .hud-top { top: 35px; padding: 0 40px; }
 html[data-workspace-mode] .hud .brand-mark { color: #c7edff; font-size: 22px; letter-spacing: .33em; }
 html[data-workspace-mode] .hud .brand-sub { font-size: 8px; color: #668fa7; letter-spacing: .19em; }
-html[data-workspace-mode] .hud .status { color: #b7deee; font: 9px 'JetBrains Mono', monospace; letter-spacing: .13em; }
+html[data-workspace-mode] .hud .status { color: #b7deee; font: 11px 'JetBrains Mono', monospace; letter-spacing: .13em; }
 html[data-workspace-mode] .hud .rail { display: none; }
-html[data-workspace-mode] .hud .suggest { display: none; }
+html[data-workspace-mode]:not([data-workspace-mode='assistente']) .hud .suggest { display: none; }
+html[data-workspace-mode='assistente'] .hud .suggest { bottom: 84px; color: #e6cda9; }
+html[data-workspace-mode='assistente'] .hud .suggest-lead { opacity: .55; }
+html[data-workspace-mode='assistente'] .hud .suggest-text { opacity: .8; }
+.hud .live-caption { position: absolute; left: 50%; bottom: 68px; transform: translateX(-50%); max-width: min(620px, 80vw); overflow: hidden; color: #f0d7b1; font-size: 12px; letter-spacing: .02em; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+html[data-cinema] .mission-control, html[data-cinema] .hud .hud-top, html[data-cinema] .hud .hud-bottom, html[data-cinema] .hud .corner, html[data-cinema] .workspace-open { display: none; }
 html[data-workspace-mode] .workspace-open { top: 75px; right: 40px; z-index: 25; padding: 7px 10px; font-size: 10px; background: #061722; border-color: #32657b88; }
 html[data-workspace-mode] .hud .hud-bottom { bottom: 50px; opacity: .5; font-size: 8px; }
 html[data-workspace-mode] .hud .tool-badge { top: 205px; z-index: 20; font-size: 10px; background: #051823ee; padding: 10px 18px; border: 1px solid #427b8f77; }
@@ -169,7 +178,10 @@ html[data-workspace-mode='assistente'] .scene-light .ember-field .ember-streak {
 }
 @keyframes ember-flicker { from { filter: brightness(.55); } to { filter: brightness(1.7); } }
 @media (prefers-reduced-motion: reduce) { html[data-workspace-mode='assistente'] .scene-light .ember-field i { animation: none; } }
-html[data-workspace-mode='assistente'] .scene-light .holo-readout { display: none; }
+html[data-workspace-mode='assistente'] .scene-light .holo-readout,
+html[data-workspace-mode='assistente'] .scene-light .sphere-readout { display: none; }
+/* Clear of the kicker above and the caption below. */
+html[data-workspace-mode='assistente'] .scene-light .neural-sphere { translate: 0 -14px; }
 html[data-workspace-mode='assistente'] .mission-control {
   --ice: #d29a55;
   --edge: #72502f88;
@@ -193,7 +205,7 @@ html[data-workspace-mode='assistente'] .mission-spectrum i { background: #d29a55
 html[data-workspace-mode='assistente'] .mode-switch,
 html[data-workspace-mode='assistente'] .tech-card { border-color: var(--edge); }
 html[data-workspace-mode='assistente'] .ignition { color: #f1d7b0; background: #1b130cf2; border-color: #d29a55; box-shadow: 0 0 40px #d29a5522; }
-html[data-workspace-mode] .ignition { inset: auto; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 20; width: auto; padding: 14px 25px; background: #082331f2; border: 1px solid #78d5f5; border-radius: 5px; box-shadow: 0 0 40px #67c8ff22; }
+html[data-workspace-mode] .ignition { inset: auto; left: 50%; bottom: 52px; transform: translateX(-50%); z-index: 20; width: auto; padding: 14px 25px; background: #082331f2; border: 1px solid #78d5f5; border-radius: 5px; box-shadow: 0 0 40px #67c8ff22; }
 html[data-workspace-mode] .ignition-ring { display: none; }
 html[data-workspace-mode] .ignition-word { font-size: 12px; letter-spacing: .18em; }
 html[data-workspace-mode] .ignition-sub { font-size: 9px; letter-spacing: .02em; opacity: .6; }
@@ -201,8 +213,9 @@ html[data-workspace-mode='assistente'] body .ignition { color: #f1d7b0; backgrou
 html[data-workspace-mode='assistente'] body .workspace-open { color: #e6cda9; background: #1b130c; border-color: #78563288; }
 html[data-workspace-mode='assistente'] .hud .brand-mark { color: #ead2af; }
 html[data-workspace-mode='assistente'] .hud .brand-sub { color: #9e8059; }
-html[data-workspace-mode='assistente'] .hud .status,
 html[data-workspace-mode='assistente'] .mission-live { color: #d2a25f; }
+html[data-workspace-mode='assistente'] .hud .status { color: #ffd79c; opacity: 1; }
+html[data-visual='helios'] .reactor-caption { display: none; }
 html[data-workspace-mode='assistente'] .mode-switch { background: #080603e8; border-color: #72502f88; }
 html[data-workspace-mode='assistente'] .hud .log { border-color: #72502f66; background: #0b0705e8; }
 .studio-deck { pointer-events: auto; position: absolute; inset: 218px 40px 102px; display: flex; flex-direction: column; gap: 18px; min-height: 0; }

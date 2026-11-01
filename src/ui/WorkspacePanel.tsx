@@ -20,7 +20,12 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
   const [memory, setMemory] = useState(workspace.memory)
   const [savedNote, setSavedNote] = useState('')
   const approveButton = useRef<HTMLButtonElement>(null)
-  useEffect(() => watchApproval(setApproval), [])
+  useEffect(() => watchApproval((next) => {
+    setApproval(next)
+    // A question nobody can see is a turn that hangs until it times out.
+    if (next) void window.jarvisDesktop?.requestAttention()
+    else void window.jarvisDesktop?.releaseAttention()
+  }), [])
   useEffect(() => { const show = (event: Event) => { setTab((event as CustomEvent<string>).detail || 'Histórico'); setOpen(true) }; window.addEventListener('jarvis:settings', show); return () => window.removeEventListener('jarvis:settings', show) }, [])
   useEffect(() => { if (approval) approveButton.current?.focus() }, [approval])
   useEffect(() => { setMemory(workspace.memory) }, [workspace.memory])
@@ -81,6 +86,9 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <MicrophoneSettings />
         <VoiceIdentitySettings onPauseVoice={onPauseVoice} onResumeVoice={onResumeVoice} />
         <h3>Voz e desempenho</h3>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.greeting} onChange={(event) => workspace.setSettings({ greeting: event.target.checked })} />Cumprimentar ao iniciar, com lembretes, tarefas e próximo passo</label>
+        <p>O resumo completo é falado uma vez por dia; nas outras aberturas, só o cumprimento. Com a voz neural, esse texto passa pela API Gemini. Se houver cidade na Central, inclui o clima, que vem do Open-Meteo.</p>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.fullBoot} onChange={(event) => workspace.setSettings({ fullBoot: event.target.checked })} />Reproduzir sempre a abertura completa</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.naturalVoice} onChange={(event) => workspace.setSettings({ naturalVoice: event.target.checked })} />Voz neural natural do Gemini</label>
         <p>Usa a API Gemini para gerar áudio em português, com ritmo mais ágil e pausas curtas. Consome a cota de áudio da API e pode adicionar alguns segundos de espera. Se falhar, usa a voz do navegador.</p>
         <label>Voz neural<select aria-label="Voz neural" value={workspace.settings.neuralVoice} onChange={(event) => workspace.setSettings({ neuralVoice: event.target.value })}>

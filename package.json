@@ -1,8 +1,8 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "1.3.0",
-  "description": "A browser voice assistant with an Iron Man holographic interface, driven by Claude Code through a small Node bridge.",
+  "version": "1.4.0",
+  "description": "Assistente pessoal por voz para Windows, em português do Brasil, com interface holográfica.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -39,6 +39,7 @@
     "desktop:dist": "npm run desktop:prepare && npm install --omit=dev --ignore-scripts --prefix desktop-app && electron-builder --config electron-builder.cjs --win --x64",
     "test:desktop-app": "node bridge/desktop-http.test.mjs",
     "test:electron": "node scripts/check-electron.mjs",
+    "test:presence": "node scripts/check-presence.mjs",
     "test:modes": "node scripts/check-modes.mjs",
     "test:studio": "node bridge/studio.test.mjs"
   },

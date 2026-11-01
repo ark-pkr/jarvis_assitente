@@ -118,6 +118,15 @@ header h1 {font-weight:580;letter-spacing:2.4px}
 @media (min-width:1100px){header h1{font-size:39px}}
 @media(max-width:680px){.reactor-heading{font-size:8px}.reactor-code{font-size:8px}}
 
+/* Inside JARVIS: the host owns the title, status and footer, and its mode switch
+   sits across the top. Everything that would double up is dropped, and the
+   command deck starts closed, below the host's header line. */
+body.embedded header,body.embedded .topright,body.embedded .guide,body.embedded .small-tag,body.embedded .vertical-ruler{display:none}
+body.embedded .telemetry{bottom:110px;left:40px}
+body.embedded #panel{top:222px;right:40px;bottom:auto;width:min(280px,calc(100% - 80px));max-height:calc(100dvh - 340px);overflow:auto}
+body.embedded .panel-body{max-height:none}
+@media(max-height:760px){body.embedded .telemetry{display:none}}
+
 #introOverlay{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:6;opacity:0;transition:opacity .35s}
 #introOverlay.show{opacity:1}
 #introOverlay::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at center,rgba(7,18,31,.08),rgba(2,8,18,.50) 45%,rgba(1,4,10,.80));}
@@ -197,7 +206,7 @@ let toastTimer=0, autoRotate=true, quality='balanced', qualityPreference='auto',
 let burstWaves=[], burstStrength=0, micLevel=0, micBass=0, micActive=false, audioContext=null, micStream=null, analyser=null, micSource=null, micData=null;
 const embedded=new URLSearchParams(location.search).has('embedded');
 let embeddedStateReceived=false,lastEmbeddedSettings='',jarvisPhase='offline',jarvisLevel=0,lastIntroSequence=0,introOnStartup=true,embeddedVisible=true,frameHandle=0;
-if(embedded)document.body.classList.add('embedded');
+if(embedded){document.body.classList.add('embedded');document.querySelector('#panel').open=false}
 let splitTarget=0,splitLevel=0,xrayEnabled=false,mechanicsDetail=1;
 let introActive=!embedded,introTime=0,introReveal=0,introSpin=0,introIgnition=0,introFlash=0,introShock=0;
 let bloomCanvas=document.createElement('canvas'),bloomCtx=bloomCanvas.getContext('2d'),bloomCounter=0;

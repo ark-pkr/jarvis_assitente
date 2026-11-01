@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { MissionControl } from './ui/MissionControl'
@@ -7,7 +7,7 @@ import { useWorkspace, flushWorkspace } from './workspace'
 import { Boot } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
-import { useStore } from './store'
+import { BOOT_MS, useStore } from './store'
 import { startVoice, type Voice, type VoiceMode } from './lib/voice'
 import { createSpeaker, cycleVoice, currentVoiceName } from './lib/tts'
 import * as sfx from './lib/sfx'
@@ -34,7 +34,7 @@ import {
 } from './lib/brain'
 import { startAnalyser, stopMicrophone, micLevel } from './lib/audio'
 import { probeCapabilities } from './lib/capabilities'
-import { env } from './config'
+import { BRIDGE_HTTP_URL, env } from './config'
 
 /**
  * The conversation.
@@ -92,6 +92,7 @@ export default function App() {
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingClarification = useRef<{ before: string; after: string } | null>(null)
   const clarificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [clapToStart, setClapToStart] = useState(false)
 
   useEffect(() => {
     const restore = () => {
@@ -151,6 +152,41 @@ export default function App() {
     s.setPhase('listening')
     sfx.play('listen')
     if (window > 0) idleTimer.current = setTimeout(goDormant, window)
+  }
+
+  /**
+   * He says hello. The saved records are read here, on this machine, so this
+   * costs no model call and cannot invent anything; once a day it is the whole
+   * briefing, and after that a greeting is enough.
+   */
+  const greet = async () => {
+    const workspace = useWorkspace.getState()
+    if (!workspace.settings.greeting || workspace.settings.privacyMode) return
+    const mine = ++turn.current
+    let line = ''
+    try {
+      const today = new Date().toLocaleDateString('en-CA')
+      const first = workspace.settings.briefingDay !== today
+      const city = first ? workspace.settings.city.trim() : ''
+      const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/briefing?city=${encodeURIComponent(city)}`, { signal: AbortSignal.timeout(3000) })
+      const briefing = await response.json() as { greeting: string; line: string }
+      line = first ? briefing.line : `${briefing.greeting}.`
+      useWorkspace.getState().setSettings({ briefingDay: today })
+    } catch { return /* Silence is a fine way to start. */ }
+    if (mine !== turn.current || !line) return
+    const spk = createSpeaker()
+    speaker.current = spk
+    const s = store.getState()
+    s.setPhase('speaking')
+    s.setCaption(line)
+    music.duck(true)
+    spk.say(line)
+    await spk.end()
+    if (mine !== turn.current) return
+    speaker.current = null
+    music.duck(false)
+    listen(AWAIT_SPEECH_MS)
+    voice.current?.arm?.(15000)
   }
 
   // -- one turn -------------------------------------------------------------
@@ -460,6 +496,9 @@ export default function App() {
 
   const ignite = async () => {
     const s = store.getState()
+    const { bootSeen, fullBoot } = useWorkspace.getState().settings
+    const short = window.matchMedia('(prefers-reduced-motion: reduce)').matches || (bootSeen && !fullBoot)
+    s.setBootShort(short)
 
     // Must happen inside the click handler — browsers won't start an
     // AudioContext or speech synthesis without a user gesture.
@@ -468,7 +507,7 @@ export default function App() {
     // The score. Must be started from inside this click handler for the same
     // reason as the rest of the audio.
     music.enable()
-    music.playBoot()
+    if (!short) music.playBoot()
     music.startAmbient()
 
     s.setPhase('boot')
@@ -486,12 +525,23 @@ export default function App() {
      * distrust an assistant — so the interface says it before they have to ask.
      */
     watchCapture(async (req) => {
+      if (req.mode === 'screen') {
+        store.getState().setLooking(req.reason ? `sua tela · ${req.reason}` : 'sua tela')
+        try {
+          if (!window.jarvisDesktop) return { error: 'Olhar a tela só funciona no aplicativo do Windows.' }
+          return await window.jarvisDesktop.captureScreen()
+        } catch (err) {
+          return { error: `Não foi possível capturar a tela: ${(err as Error)?.message ?? err}` }
+        } finally {
+          store.getState().setLooking(null)
+        }
+      }
       const note =
         req.mode === 'watch'
           ? req.when === 'past'
-            ? req.reason || 'reviewing the last few seconds'
-            : `${req.reason || 'watching'} · ${req.seconds}s`
-          : req.reason || 'taking a look'
+            ? req.reason || 'revendo os últimos segundos'
+            : `${req.reason || 'observando'} · ${req.seconds}s`
+          : req.reason || 'dando uma olhada'
       store.getState().setLooking(note)
 
       // The past is only available if something has been remembering it, and
@@ -502,9 +552,9 @@ export default function App() {
         store.getState().setLooking(null)
         return {
           error:
-            'There is no recent footage — the camera has to be open on screen ' +
-            'for me to remember what just happened. Ask me to open the camera, ' +
-            'and I can watch from then on.',
+            'Não há imagens recentes: a câmera precisa estar aberta na tela para ' +
+            'eu lembrar do que acabou de acontecer. Peça para abrir a câmera e ' +
+            'eu posso observar a partir daí.',
         }
       }
 
@@ -517,15 +567,15 @@ export default function App() {
         if (req.mode === 'look') return camera.grabFrame()
         if (req.when === 'past') {
           const grid = camera.recentGrid(req.seconds, 9)
-          return grid ?? { error: 'There is not enough recent footage to review.' }
+          return grid ?? { error: 'Não há imagens recentes suficientes para rever.' }
         }
         return await camera.watchAhead(req.seconds, 9)
       } catch (err) {
         return {
           error:
             (err as DOMException)?.name === 'NotAllowedError'
-              ? 'The camera is not permitted, so I cannot see anything.'
-              : `The camera could not be read: ${(err as Error)?.message ?? err}`,
+              ? 'A câmera não foi permitida, então não consigo ver nada.'
+              : `Não foi possível ler a câmera: ${(err as Error)?.message ?? err}`,
         }
       } finally {
         if (held) camera.releaseCamera()
@@ -593,7 +643,7 @@ export default function App() {
 
     if (!usingBridge && !env.anthropicKey) {
       s.setError(
-        'No Anthropic API key — copy .env.example to .env.local and set VITE_ANTHROPIC_API_KEY.',
+        'Sem chave da API: copie .env.example para .env.local e preencha VITE_ANTHROPIC_API_KEY.',
       )
     }
 
@@ -601,8 +651,9 @@ export default function App() {
     // status bar, rings, suit schematic, reactor power-up — before the live
     // interface takes over. Kept a touch under the boot cue so the music is
     // still rising as the reactor lands.
-    await new Promise((r) => setTimeout(r, 9200)) // boot sequence
+    await new Promise((r) => setTimeout(r, short ? BOOT_MS.short : BOOT_MS.full)) // boot sequence
     await warming
+    useWorkspace.getState().setSettings({ bootSeen: true })
     store.getState().setConnected(connectedLabels())
     store.getState().setVoice(currentVoiceName())
 
@@ -622,8 +673,22 @@ export default function App() {
     }
 
     if (useWorkspace.getState().settings.privacyMode) store.getState().setPhase('dormant')
-    else await startVoiceLoop()
+    else {
+      await startVoiceLoop()
+      void greet()
+    }
   }
+
+  // -- starting without a click ---------------------------------------------
+
+  // Both opt-in, because both mean the microphone opens with nobody at the app.
+  useEffect(() => {
+    void window.jarvisDesktop?.settings().then((settings) => {
+      setClapToStart(settings.clapToStart)
+      if (settings.autoActivate && store.getState().phase === 'offline') void powerOn()
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // -- clap to start --------------------------------------------------------
 
@@ -640,7 +705,7 @@ export default function App() {
    * about a feature nobody asked for would be worse than quietly doing without.
    */
   useEffect(() => {
-    if (phase !== 'offline' || window.jarvisDesktop) return
+    if (phase !== 'offline' || (window.jarvisDesktop && !clapToStart)) return
     let live: { stop: () => void } | null = null
     let gone = false
     void listenForClap(() => {
@@ -654,20 +719,35 @@ export default function App() {
       live?.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase])
+  }, [phase, clapToStart])
 
   // -- level pump + keys ----------------------------------------------------
 
-  useEffect(() => {
-    let raf = 0
-    let lastMeterUpdate = 0
+  /** Space and the global shortcut are one gesture: "I'm talking to you". */
+  const activate = () => {
+    voice.current?.arm?.(30000, true)
+    const phase = store.getState().phase
+    if (phase === 'offline') {
+      void powerOn()
+    } else if (phase === 'boot') {
+      /* ignore — the boot sequence owns the phase until it finishes */
+    } else if (
+      phase === 'thinking' ||
+      phase === 'tooling' ||
+      phase === 'speaking'
+    ) {
+      onSpeechStart()
+      listen(AWAIT_SPEECH_MS)
+    } else {
+      onWake('')
+    }
+  }
 
-    const pump = (now = performance.now()) => {
-      if (document.hidden || now - lastMeterUpdate < 66) {
-        raf = requestAnimationFrame(pump)
-        return
-      }
-      lastMeterUpdate = now
+  useEffect(() => {
+    // A timer rather than requestAnimationFrame, which stops with the window,
+    // and the floating orb has to keep moving exactly when the window is gone.
+    const pump = () => {
+      if (document.hidden && !window.jarvisDesktop) return
       const st = store.getState()
       // While speaking, follow JARVIS's own output rather than the mic, so the
       // orb lip-syncs instead of reacting to room noise.
@@ -676,9 +756,10 @@ export default function App() {
           ? speaker.current.level()
           : micLevel()
       if (Math.abs(lvl - st.level) >= .015 || (lvl === 0 && st.level !== 0)) st.setLevel(lvl)
-      raf = requestAnimationFrame(pump)
+      window.jarvisDesktop?.publishState({ phase: st.phase, level: lvl, caption: st.caption === '…' ? '' : st.caption, looking: st.looking ?? '' })
     }
-    pump()
+    const meter = setInterval(pump, 66)
+    const hotkey = window.jarvisDesktop?.onHotkey(activate)
 
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -725,8 +806,8 @@ export default function App() {
                 .getState()
                 .setError(
                   err?.name === 'NotAllowedError'
-                    ? 'Camera access denied — gesture control is unavailable.'
-                    : `Gesture control failed to start: ${err?.message ?? err}`,
+                    ? 'Acesso à câmera negado: o controle por gestos não está disponível.'
+                    : `Não foi possível iniciar o controle por gestos: ${err?.message ?? err}`,
                 )
             })
         }
@@ -748,7 +829,7 @@ export default function App() {
           console.info('[jarvis] audio test →', d)
           if (d && d.started === 0 && d.rescued === 0) {
             store.getState().setError(
-              `No sound produced. engine=${d.engine} voice=${d.voice} error=${d.lastError || 'none'}`,
+              `Nenhum som foi produzido. Motor: ${d.engine}, voz: ${d.voice}, erro: ${d.lastError || 'nenhum'}.`,
             )
           }
         })
@@ -767,28 +848,13 @@ export default function App() {
       // a missed wake word doesn't cost a take.
       if (e.code !== 'Space' || e.repeat) return
       e.preventDefault()
-      voice.current?.arm?.(30000, true)
-
-      const phase = store.getState().phase
-      if (phase === 'offline') {
-        void powerOn()
-      } else if (phase === 'boot') {
-        /* ignore — the boot sequence owns the phase until it finishes */
-      } else if (
-        phase === 'thinking' ||
-        phase === 'tooling' ||
-        phase === 'speaking'
-      ) {
-        onSpeechStart()
-        listen(AWAIT_SPEECH_MS)
-      } else {
-        onWake('')
-      }
+      activate()
     }
     window.addEventListener('keydown', onKey)
 
     return () => {
-      cancelAnimationFrame(raf)
+      clearInterval(meter)
+      hotkey?.()
       window.removeEventListener('keydown', onKey)
       clearIdle()
       clearClarification()

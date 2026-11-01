@@ -83,6 +83,16 @@ export function Scene() {
     return () => document.removeEventListener('visibilitychange', update)
   }, [])
   useEffect(() => {
+    document.documentElement.dataset.visual = visualTheme
+  }, [visualTheme])
+  // Cinema means the hologram alone, and our own chrome sits above the iframe
+  // where the setting inside it cannot reach.
+  const cinema = useWorkspace((state) => state.settings.visualTheme === 'helios' && state.settings.helios.cinema)
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-cinema', cinema)
+    return () => document.documentElement.removeAttribute('data-cinema')
+  }, [cinema])
+  useEffect(() => {
     if (visualTheme !== 'helios') return
     const frame = heliosFrame.current
     let lastLevelAt = 0

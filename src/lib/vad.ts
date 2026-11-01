@@ -2,7 +2,7 @@ import { getMic } from './audio'
 import { SpeechGate } from './speechGate'
 import { useWorkspace } from '../workspace'
 
-export type VadHandlers = { onStart: () => void; onEnd: (audio: Blob, ms: number) => void; onLevel: (value: number) => void; onError: (message: string) => void }
+export type VadHandlers = { onStart: () => void; onEnd: (audio: Blob, ms: number) => void; onLevel: (value: number) => void; onError: (message: string) => void; onAudio?: (samples: Float32Array, rate: number) => void }
 export type Vad = { stop: () => void; setGuard: (on: boolean) => void; live: () => boolean; meter: () => { energy: number; floor: number; threshold: number; speaking: boolean } }
 
 // Batch PCM in the audio thread. Unlike RAF/MediaRecorder, this preserves the
@@ -63,6 +63,9 @@ export async function startVad(h: VadHandlers): Promise<Vad> {
     const mute = ctx.createGain(); mute.gain.value = 0; capture.connect(mute); mute.connect(ctx.destination)
     capture.port.onmessage = ({ data: samples }: MessageEvent<Float32Array>) => {
       if (stopped) return
+      // Before the guard below, which is the point: this hears him being called
+      // while the capture path is deliberately deaf to his own voice.
+      h.onAudio?.(samples, ctx.sampleRate)
       let sum = 0; for (const sample of samples) sum += sample * sample
       energy = Math.sqrt(sum / samples.length)
       h.onLevel(Math.min(1, energy * 12))

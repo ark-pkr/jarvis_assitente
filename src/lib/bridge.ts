@@ -81,8 +81,8 @@ export function watchPanels(fn: (panel: Panel) => void) {
  * and its result is returned against the request's id.
  */
 export type CaptureRequest = {
-  /** 'look' for a single frame, 'watch' for a grid over time. */
-  mode: 'look' | 'watch'
+  /** 'look' for a single frame, 'watch' for a grid over time, 'screen' for the monitor. */
+  mode: 'look' | 'watch' | 'screen'
   reason: string
   seconds: number
   /** 'now' records forward; 'past' reads the rolling buffer. */
@@ -217,13 +217,13 @@ function dispatch(ws: WebSocket) {
         }
       }
       if (!onCapture) {
-        reply({ error: 'The interface has no camera handler.' })
+        reply({ error: 'A interface não tem acesso à câmera agora.' })
       } else {
         // Always answers, even on failure: the bridge is holding a turn open
         // waiting for this, and a rejection that never arrives is a turn that
         // hangs until the idle timer notices.
         onCapture({
-          mode: msg.mode === 'watch' ? 'watch' : 'look',
+          mode: msg.mode === 'watch' || msg.mode === 'screen' ? msg.mode : 'look',
           reason: msg.reason ?? '',
           seconds: Math.max(2, Math.min(15, Number(msg.seconds) || 6)),
           when: msg.when === 'past' ? 'past' : 'now',
@@ -266,7 +266,7 @@ function connect(): Promise<WebSocket> {
 
     const timer = setTimeout(() => {
       ws.close()
-      settle(new Error('Bridge not responding — is `npm run bridge` running?'))
+      settle(new Error('O serviço local não respondeu. Em desenvolvimento, confira se o `npm start` está rodando.'))
     }, 6000)
 
     ws.onopen = () => {
@@ -293,10 +293,10 @@ function connect(): Promise<WebSocket> {
        */
       settle(
         new Error(
-          `Cannot reach the bridge at ${BRIDGE_WS_URL}. Either it is not ` +
-            'running (start it with `npm start`), or this page is on a port it ' +
-            `refuses — it accepts localhost:5173-5199 and 4173-4199, and this ` +
-            `page is on ${location.port || '80'}.`,
+          `Não foi possível conectar ao serviço em ${BRIDGE_WS_URL}. Ou ele não está ` +
+            'rodando (inicie com `npm start`), ou esta página está em uma porta ' +
+            `recusada: ele aceita localhost:5173-5199 e 4173-4199, e esta página ` +
+            `está na ${location.port || '80'}.`,
         ),
       )
     }
@@ -304,7 +304,7 @@ function connect(): Promise<WebSocket> {
       onApproval?.(null)
       // A close before open is just a failed dial; after open it's a lost
       // session, and the two want different handling.
-      settle(new Error('The bridge closed the connection.'))
+      settle(new Error('O serviço local encerrou a conexão.'))
       if (socket === ws) {
         socket = null
         onConnection?.('lost')
@@ -487,7 +487,7 @@ export async function ask(
       fail(new Error('The bridge disconnected mid-answer — that session is gone.'))
     }
     const onError = () => {
-      fail(new Error('The connection to the bridge failed.'))
+      fail(new Error('A conexão com o serviço local falhou.'))
     }
 
     pending = { finish }

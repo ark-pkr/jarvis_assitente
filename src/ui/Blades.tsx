@@ -143,8 +143,8 @@ const CameraView = memo(function CameraView() {
       .catch((err: DOMException) =>
         failed_(
           err?.name === 'NotAllowedError'
-            ? 'Camera access is not permitted.'
-            : `The camera could not be opened: ${err?.message ?? err}`,
+            ? 'O acesso à câmera não foi permitido.'
+            : `Não foi possível abrir a câmera: ${err?.message ?? err}`,
         ),
       )
     return () => {
@@ -179,7 +179,7 @@ const Body = memo(function Body({ blade }: { blade: Blade }) {
 
   if (blade.kind === 'embed' && blade.url) {
     const embed = embedUrl(blade.url)
-    if (!embed) return <p className="bl-note">That video link could not be played.</p>
+    if (!embed) return <p className="bl-note">Este link de vídeo não pôde ser reproduzido.</p>
     return (
       <iframe
         className="bl-frame"
@@ -233,7 +233,7 @@ const Body = memo(function Body({ blade }: { blade: Blade }) {
     )
   }
 
-  return <p className="bl-note">Nothing to show.</p>
+  return <p className="bl-note">Nada para mostrar.</p>
 })
 
 /* -------------------------------------------------------------------- card */

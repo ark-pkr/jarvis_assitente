@@ -35,7 +35,7 @@ try {
     store.setLevel(.65)
   })
   const helios = page.frameLocator('iframe[title="Holograma do reator HELIOS"]')
-  await helios.getByRole('heading', { name: 'REATOR HELIOS' }).waitFor()
+  await helios.getByRole('heading', { name: 'REATOR HELIOS', includeHidden: true }).waitFor({ state: 'attached' })
   await page.waitForFunction(() => {
     const frame = document.querySelector('iframe[title="Holograma do reator HELIOS"]')
     return frame?.contentDocument?.querySelector('#status')?.textContent === 'ESCUTANDO'
@@ -43,6 +43,7 @@ try {
   assert.equal(await helios.locator('.mic-control').evaluate((element) => getComputedStyle(element).display), 'none')
   assert.equal(await helios.locator('#introOverlay').evaluate((element) => element.classList.contains('show')), false)
   assert.equal(await helios.locator('#quality').inputValue(), 'eco')
+  await helios.locator('#panel summary').click()
   await helios.locator('#speed').evaluate((element) => { element.value = '2'; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })) })
   await helios.locator('[data-palette="cyan"]').click()
   await helios.locator('#pause').click()
