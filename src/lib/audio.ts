@@ -5,6 +5,7 @@
  */
 
 import { useWorkspace } from '../workspace'
+import { bandsFrom, SILENT, type Bands } from './voiceBands'
 let stream: MediaStream | null = null
 let ctx: AudioContext | null = null
 let analyser: AnalyserNode | null = null
@@ -65,6 +66,13 @@ export function micLevel(): number {
   const avg = sum / (buf.length - 4) / 255
   // Voice sits low in this range; stretch it so the visuals actually move.
   return Math.min(1, avg * 3.2)
+}
+
+/** The same reading split into the parts of a voice. */
+export function micBands(): Bands {
+  if (!analyser || !buf) return SILENT
+  analyser.getByteFrequencyData(buf as Uint8Array<ArrayBuffer>)
+  return bandsFrom(buf, analyser.context.sampleRate)
 }
 
 /** Analyser fed from an <audio> element, so the orb reacts while JARVIS talks. */

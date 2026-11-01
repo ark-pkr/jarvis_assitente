@@ -99,6 +99,8 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
             <option value="sphere">Esfera neural dourada</option><option value="reactor">Reator circular</option><option value="helios">Reator HELIOS cinematográfico</option>
           </select>
         </label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.holoCore} onChange={(event) => workspace.setSettings({ holoCore: event.target.checked })} />Buraco negro pela placa de vídeo</label>
+        <p>A nitidez se ajusta sozinha ao seu computador. Desmarque para voltar à esfera simples.</p>
         <p>A esfera neural e o reator circular usam os visuais leves. O HELIOS abre o reator cinematográfico integrado à conversa e aos comandos de voz, sem pedir acesso adicional ao microfone.</p>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.helios.introOnStartup} onChange={(event) => workspace.setSettings({ helios: { introOnStartup: event.target.checked } })} />Reproduzir abertura cinematográfica ao iniciar o HELIOS</label>
         <label>Qualidade do HELIOS

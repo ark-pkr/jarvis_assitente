@@ -1,5 +1,30 @@
 # Histórico de versões
 
+## 1.4.4
+
+**Visual**
+- O núcleo agora é um buraco negro calculado por traçado de raios na tela inteira: a luz é curvada pela gravidade de verdade, e o disco de gás fica mais brilhante do lado que gira na sua direção.
+- A voz move a cena: os graves acendem o disco, os médios mandam ondas de luz e os agudos realçam o gás. Ao pensar, o disco esfria para azul; com ferramentas, fica verde.
+- A nitidez se ajusta sozinha ao computador. Sem suporte, ou se a placa falhar, volta à esfera simples; a opção fica em Histórico e ajustes.
+
+## 1.4.3
+
+**Visual**
+- A esfera virou um holograma de até 60 mil partículas, desenhado pela placa de vídeo, com núcleo de luz, filamentos internos e fagulhas saindo da superfície.
+- O holograma reage às frequências da voz: os graves incham o corpo, os médios correm em ondas e os agudos acendem pontos.
+- Cada estado tem sua própria animação: pensar cruza a esfera com frentes de luz azul e usar uma ferramenta a varre em verde.
+- A qualidade se ajusta sozinha ao computador. Sem suporte, ou se a placa falhar, volta à esfera simples; a opção fica em Histórico e ajustes.
+
+**Voz**
+- Se a cota diária do modelo de voz acabar, o JARVIS passa sozinho para um modelo reserva em vez de cair na voz do Windows.
+
+## 1.4.2
+
+**Velocidade**
+- A fala é transcrita enquanto você fala: o texto fica pronto em cerca de 0,4 s depois do fim da fala, em vez de 1,4 s. Se esse caminho falhar, o JARVIS usa a transcrição anterior sozinho.
+- Um som curto confirma que ele entendeu, cerca de 1 s depois que você termina.
+- Em pedidos naturalmente demorados, como clima, pesquisa e leitura da tela, uma frase curta toca logo depois da transcrição.
+
 ## 1.4.1
 
 **Velocidade**

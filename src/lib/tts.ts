@@ -1,3 +1,4 @@
+import { setOutputAnalyser } from './voiceBands'
 import { createStretcher, type Stretcher } from './timeStretch'
 import {
   env,
@@ -589,6 +590,7 @@ export function createSpeaker(): Speaker {
       volume.connect(analyser)
       analyser.connect(ctx.destination)
       const bins = new Uint8Array(analyser.frequencyBinCount)
+      setOutputAnalyser(analyser)
       // A timer, not a frame callback: the orb has to keep moving with the
       // window hidden.
       const meter = setInterval(() => {
@@ -608,6 +610,7 @@ export function createSpeaker(): Speaker {
         done = true
         if (activeFinish === finish) activeFinish = null
         clearInterval(meter)
+        setOutputAnalyser(null)
         for (const source of sources) { source.onended = null; try { source.stop() } catch { /* never started */ } }
         volume.disconnect()
         analyser.disconnect()

@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useWorkspace, type HeliosSettings } from '../workspace'
 import { accentFor, useStore } from '../store'
 import { NeuralSphere } from './NeuralSphere'
+import { HoloCore } from './HoloCore'
 export type { Drive } from './DetailedScene'
 
 // Load WebGL only if the user opts into the full visual effects.
@@ -11,6 +12,10 @@ function LightScene({ active }: { active: boolean }) {
   const phase = useStore((state) => state.phase)
   const ui = useStore((state) => state.ui)
   const visualTheme = useWorkspace((state) => state.settings.visualTheme)
+  const wantsHole = useWorkspace((state) => state.settings.holoCore)
+  const [holeFailed, setHoleFailed] = useState(false)
+  const holeFailure = useCallback(() => setHoleFailed(true), [])
+  const hole = wantsHole && !holeFailed && ui.reactor.visible && visualTheme === 'sphere'
   const embers = useMemo(() => visualTheme === 'reactor' ? Array.from({ length: 320 }, (_, index) => {
     const random = (salt: number) => {
       const value = Math.sin((index + 1) * salt) * 43758.5453
@@ -30,9 +35,10 @@ function LightScene({ active }: { active: boolean }) {
     ['--reactor-color' as string]: ui.reactor.color || accentFor(phase, ui),
     ['--reactor-scale' as string]: ui.reactor.scale,
   }}>
+    {hole && <HoloCore active={active} onFailure={holeFailure} />}
     <div className="holo-grid" />
-    {ui.reactor.visible && visualTheme === 'sphere' ? <div className={`neural-sphere light-reactor-${phase}`}>
-      <NeuralSphere active={active} />
+    {ui.reactor.visible && visualTheme === 'sphere' ? <div className={`neural-sphere light-reactor-${phase}${hole ? ' behind-hole' : ''}`}>
+      {!hole && <NeuralSphere active={active} />}
       <div className="sphere-readout"><small>CAMPO NEURAL</small><b>{phase === 'speaking' ? 'RESPONDENDO' : ['thinking', 'tooling'].includes(phase) ? 'PROCESSANDO' : phase === 'listening' ? 'ESCUTA ATIVA' : 'J.A.R.V.I.S.'}</b>
         <div className="sphere-wave">{[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} style={{ animationDelay: `${i * -.16}s` }} />)}</div>
       </div>
