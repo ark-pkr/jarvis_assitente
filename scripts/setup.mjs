@@ -27,20 +27,20 @@ console.log('------------------------------------------------------------');
 // --- Node version --------------------------------------------------------
 try {
   const major = Number(process.versions.node.split('.')[0]);
-  if (Number.isFinite(major) && major >= 20) {
-    line(tick, `Node.js ${process.versions.node} (20+ required).`);
+  if (Number.isFinite(major) && major >= 22) {
+    line(tick, `Node.js ${process.versions.node} (22+ required).`);
   } else {
-    line(warn, `Node.js ${process.versions.node} is below 20. Please upgrade — the bridge needs Node 20 or newer.`);
+    line(warn, `Node.js ${process.versions.node} is below 22. Please upgrade — the bridge needs Node 22 or newer.`);
   }
 } catch {
-  line(warn, 'Could not read the Node.js version. JARVIS needs Node 20 or newer.');
+  line(warn, 'Could not read the Node.js version. JARVIS needs Node 22 or newer.');
 }
 
 // --- Claude CLI on PATH ---------------------------------------------------
 const usesGemini = (process.env.JARVIS_PROVIDER || 'gemini') === 'gemini';
 if (usesGemini) {
   line(process.env.GEMINI_API_KEY?.trim() ? tick : warn,
-    process.env.GEMINI_API_KEY?.trim() ? 'Gemini API key configured.' : 'Set GEMINI_API_KEY in .env.local (see README-GEMINI.md).');
+    process.env.GEMINI_API_KEY?.trim() ? 'Gemini API key configured.' : 'Set GEMINI_API_KEY in .env.local (see README.md).');
 }
 let claudeFound = false;
 if (!usesGemini) {

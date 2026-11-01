@@ -1,31 +1,13 @@
-param([switch]$RemoveStartup)
 $ErrorActionPreference = 'Stop'
 $projectDirectory = Split-Path -Parent $PSScriptRoot
-$startupDirectory = [Environment]::GetFolderPath('Startup')
-$shortcutPath = Join-Path $startupDirectory 'JARVIS Assistente.lnk'
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$arguments = '-NoProfile -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'start-jarvis.ps1') + '"'
-if ((Test-Path -LiteralPath $shortcutPath) -and $shortcut.Arguments -ne $arguments) { throw 'Atalho existente pertence a outra configuracao. Nada foi alterado.' }
-if ($RemoveStartup) {
-    if (Test-Path -LiteralPath $shortcutPath) { Remove-Item -LiteralPath $shortcutPath }
-    Write-Output 'Inicializacao automatica removida.'
-    exit
-}
-$shortcut.TargetPath = (Get-Command powershell.exe).Source
-$shortcut.Arguments = $arguments
-$shortcut.WorkingDirectory = $projectDirectory
-$shortcut.WindowStyle = 7
-$shortcut.Description = 'JARVIS: interface, servicos e lembretes ao entrar no Windows'
-$shortcut.Save()
-Write-Output "Inicializacao automatica configurada: $shortcutPath"
 
 $extensionSource = Join-Path $projectDirectory 'integrations\vscode'
-$packageDirectory = Join-Path $projectDirectory '.jarvis-data\integrations'
+$dataDirectory = Join-Path $env:APPDATA 'JARVIS\dados'
+$packageDirectory = Join-Path $env:APPDATA 'JARVIS\integrations'
 New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
 $packagePath = Join-Path $packageDirectory 'jarvis-local.vsix'
 $manifest = Get-Content -LiteralPath (Join-Path $extensionSource 'package.json') -Raw | ConvertFrom-Json
-$manifest.contributes.configuration.properties.'jarvis.snapshotDirectory'.default = Join-Path $projectDirectory '.jarvis-data'
+$manifest.contributes.configuration.properties.'jarvis.snapshotDirectory'.default = $dataDirectory
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (Test-Path -LiteralPath $packagePath) { Remove-Item -LiteralPath $packagePath }

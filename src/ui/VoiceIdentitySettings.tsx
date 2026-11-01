@@ -30,6 +30,7 @@ export function VoiceIdentitySettings({ onPauseVoice, onResumeVoice }: { onPause
       mounted.current = false
       const resume = busyRef.current
       busyRef.current = false
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- a counter, read for its value at unmount.
       generation.current++
       vad.current?.stop()
       vad.current = null

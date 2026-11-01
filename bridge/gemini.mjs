@@ -46,10 +46,10 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
           cursor = page.nextCursor
         } while (cursor)
         connected.push({ name: server, status: 'connected' })
-      } catch {
+      } catch (error) {
         await client.close().catch(() => {})
         connected.push({ name: server, status: 'failed' })
-        console.warn(`[jarvis] MCP ${server} unavailable for Gemini`)
+        console.warn(`[jarvis] MCP ${server} unavailable for Gemini: ${error?.message ?? error}`)
       }
     }
   }
@@ -117,9 +117,10 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
                 try {
                   result = await entry.client.callTool({ name: entry.tool.name, arguments: call.args ?? {} },
                     undefined, { signal, timeout: 110_000 })
-                } catch {
+                } catch (error) {
                   signal.throwIfAborted()
-                  result = { isError: true, content: [{ type: 'text', text: 'Tool execution failed.' }] }
+                  console.warn(`[jarvis] tool ${entry.original} failed: ${error?.message ?? error}`)
+                  result = { isError: true, content: [{ type: 'text', text: `Tool execution failed: ${String(error?.message ?? error).slice(0, 300)}` }] }
                 }
               }
               signal.throwIfAborted()
@@ -142,6 +143,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
           if (signal.aborted) {
             yield { type: 'result', subtype: 'success', result: '' }
           } else {
+            console.error(`[jarvis] Gemini turn failed: ${error?.message ?? error}`)
             const status = Number(error.status)
             const message = status === 429 ? 'Gemini: limite de uso atingido. Verifique a cota da API.'
               : [400, 401, 403].includes(status) ? 'Gemini: verifique a chave da API e as permissões do modelo.'
