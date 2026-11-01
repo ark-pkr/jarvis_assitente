@@ -8,8 +8,12 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.browser-profile/
+.jarvis-data/
 dist
 dist-ssr
+desktop-app/
+release/
 *.local
 
 # Editor directories and files

@@ -4,25 +4,37 @@
  * the earlier stream, so everything that needs audio goes through here.
  */
 
+import { useWorkspace } from '../workspace'
 let stream: MediaStream | null = null
 let ctx: AudioContext | null = null
 let analyser: AnalyserNode | null = null
 let buf: Uint8Array | null = null
 
 export async function getMic(): Promise<MediaStream> {
-  if (stream) return stream
+  if (stream?.getAudioTracks().some((track) => track.readyState === 'live')) return stream
+  if (stream) {
+    stream.getTracks().forEach((track) => track.stop())
+    stream = null; analyser = null; buf = null
+    void ctx?.close(); ctx = null
+  }
   stream = await navigator.mediaDevices.getUserMedia({
     audio: {
+      ...(useWorkspace.getState().settings.inputDeviceId ? { deviceId: { exact: useWorkspace.getState().settings.inputDeviceId } } : {}),
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
+      channelCount: { ideal: 1 },
+      sampleRate: { ideal: 48000 },
     },
   })
   return stream
 }
 
 export async function startAnalyser(): Promise<void> {
-  if (analyser) return
+  if (analyser && stream?.getAudioTracks().some((track) => track.readyState === 'live')) {
+    if (ctx?.state === 'suspended') await ctx.resume()
+    return
+  }
   const s = await getMic()
   ctx = new AudioContext()
   const src = ctx.createMediaStreamSource(s)
@@ -31,6 +43,16 @@ export async function startAnalyser(): Promise<void> {
   analyser.smoothingTimeConstant = 0.75
   src.connect(analyser)
   buf = new Uint8Array(analyser.frequencyBinCount)
+}
+
+export async function stopMicrophone(): Promise<void> {
+  stream?.getTracks().forEach((track) => track.stop())
+  stream = null
+  analyser = null
+  buf = null
+  const context = ctx
+  ctx = null
+  if (context && context.state !== 'closed') await context.close()
 }
 
 /** 0..1 loudness. Returns 0 before the analyser is up. */

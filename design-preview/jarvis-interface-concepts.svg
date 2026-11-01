@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1030" viewBox="0 0 1600 1030" role="img" aria-labelledby="title description">
+  <title id="title">Três conceitos originais para a interface do JARVIS</title>
+  <desc id="description">Prancha de interface futurista com os modos conversa, mesa de trabalho e análise.</desc>
+  <defs>
+    <linearGradient id="bg" x2="0" y2="1">
+      <stop stop-color="#08131e"/>
+      <stop offset="1" stop-color="#03080e"/>
+    </linearGradient>
+    <linearGradient id="panel" x2="0" y2="1">
+      <stop stop-color="#0b1c29" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#07111a" stop-opacity=".98"/>
+    </linearGradient>
+    <radialGradient id="reactor">
+      <stop stop-color="#e6ffff"/>
+      <stop offset=".14" stop-color="#9dfaff"/>
+      <stop offset=".28" stop-color="#25c8ed"/>
+      <stop offset=".5" stop-color="#0876a5" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#0b456a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="amber">
+      <stop stop-color="#fff5cd"/>
+      <stop offset=".2" stop-color="#ffcf70"/>
+      <stop offset=".55" stop-color="#fa8a35" stop-opacity=".75"/>
+      <stop offset="1" stop-color="#a3421c" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1b5266" stroke-opacity=".16" stroke-width="1"/>
+    </pattern>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; }
+      .title { fill:#dffaff; font-size:30px; font-weight:600; letter-spacing:2px; }
+      .sub { fill:#77b7c8; font-size:15px; letter-spacing:1px; }
+      .label { fill:#71dff3; font-size:11px; letter-spacing:2px; }
+      .body { fill:#d1e8ed; font-size:14px; }
+      .muted { fill:#648493; font-size:12px; }
+      .tiny { fill:#62a8bb; font-size:10px; letter-spacing:1px; }
+      .line { stroke:#42cbe4; stroke-opacity:.58; stroke-width:1; fill:none; }
+      .dim { stroke:#28677b; stroke-opacity:.55; stroke-width:1; fill:none; }
+    </style>
+  </defs>
+  <rect width="1600" height="1030" fill="url(#bg)"/>
+  <rect width="1600" height="1030" fill="url(#grid)"/>
+  <path d="M0 94H1600" stroke="#1c5264" stroke-opacity=".7"/>
+  <text x="64" y="52" class="title">J.A.R.V.I.S. / INTERFACE CONCEPTS</text>
+  <text x="66" y="76" class="sub">TRÊS DIREÇÕES VISUAIS · HUD ORIGINAL · CONTROLES CLAROS E LEGÍVEIS</text>
+  <g transform="translate(1375 49)">
+    <circle r="5" fill="#62f3c1" filter="url(#glow)"/>
+    <text x="16" y="4" class="tiny">SISTEMA ONLINE</text>
+  </g>
+
+  <!-- Concept 1: holographic conversation -->
+  <g transform="translate(52 122)">
+    <rect width="480" height="850" rx="18" fill="url(#panel)" stroke="#24748a" stroke-opacity=".8"/>
+    <path d="M18 72H462M18 784H462" class="dim"/>
+    <text x="26" y="39" class="label">01 / CONVERSA HOLOGRÁFICA</text>
+    <text x="26" y="61" class="muted">Presença central · voz · estado em tempo real</text>
+    <text x="26" y="104" class="tiny">JARVIS // ASSISTENTE ATIVO</text>
+    <text x="454" y="104" text-anchor="end" class="tiny">14:32:08</text>
+    <circle cx="240" cy="374" r="151" fill="#21a7cb" opacity=".12" filter="url(#softGlow)"/>
+    <circle cx="240" cy="374" r="119" fill="none" stroke="#2ad7f3" stroke-opacity=".28"/>
+    <circle cx="240" cy="374" r="106" fill="none" stroke="#47daf0" stroke-width="1.5" stroke-dasharray="4 7"/>
+    <circle cx="240" cy="374" r="93" fill="none" stroke="#46d9ef" stroke-opacity=".75" stroke-dasharray="62 18 18 16 22 10"/>
+    <circle cx="240" cy="374" r="78" fill="url(#reactor)" opacity=".78"/>
+    <circle cx="240" cy="374" r="46" fill="none" stroke="#d3ffff" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="240" cy="374" r="31" fill="#8efaff" opacity=".76" filter="url(#glow)"/>
+    <path d="M240 253V292M240 456V495M119 374H158M322 374H361M154 288l28 28M298 432l28 28M326 288l-28 28M182 432l-28 28" class="line"/>
+    <path d="M105 374h30m210 0h30M240 239v26m0 218v26" stroke="#a9faff" stroke-width="2" filter="url(#glow)"/>
+    <text x="240" y="526" text-anchor="middle" class="label">OUVINDO</text>
+    <text x="240" y="549" text-anchor="middle" class="muted">Pode falar. Estou acompanhando.</text>
+    <g transform="translate(47 600)">
+      <rect width="386" height="105" rx="9" fill="#0b202c" stroke="#23677b"/>
+      <text x="18" y="27" class="tiny">VOCÊ</text>
+      <text x="18" y="53" class="body">“Jarvis, resuma o que falta</text>
+      <text x="18" y="75" class="body">no meu projeto.”</text>
+      <circle cx="354" cy="24" r="4" fill="#58e9f2"/>
+    </g>
+    <g transform="translate(47 721)">
+      <path d="M0 0H386" class="dim"/>
+      <text x="0" y="26" class="tiny">MICROFONE</text>
+      <text x="386" y="26" text-anchor="end" class="tiny">MEMÓRIA: SOB CONTROLE</text>
+      <rect y="43" width="386" height="5" rx="3" fill="#143240"/>
+      <rect y="43" width="268" height="5" rx="3" fill="#48d9ec" opacity=".75"/>
+      <path d="M0 70H386" class="dim"/>
+      <text x="0" y="96" class="muted">Esc para pausar · Espaço para falar</text>
+    </g>
+    <text x="26" y="820" class="tiny">VISUALIZAÇÃO CONCEITUAL · NÃO É UMA CAPTURA DO APP</text>
+  </g>
+
+  <!-- Concept 2: workbench -->
+  <g transform="translate(560 122)">
+    <rect width="480" height="850" rx="18" fill="url(#panel)" stroke="#24748a" stroke-opacity=".8"/>
+    <path d="M18 72H462M18 784H462" class="dim"/>
+    <text x="26" y="39" class="label">02 / MESA DE TRABALHO</text>
+    <text x="26" y="61" class="muted">Projetos, contexto e ações no mesmo espaço</text>
+    <text x="26" y="104" class="tiny">ESPAÇO DE TRABALHO / PROJETO JARVIS</text>
+    <text x="26" y="143" class="body" font-size="20">Bom dia, Rogério.</text>
+    <text x="26" y="166" class="muted">Aqui está o contexto para continuar.</text>
+    <g transform="translate(26 194)">
+      <rect width="428" height="143" rx="10" fill="#0a1c28" stroke="#23677b"/>
+      <text x="18" y="27" class="tiny">PROJETO ATIVO</text>
+      <text x="18" y="55" class="body" font-size="17">JARVIS Assistente</text>
+      <text x="18" y="80" class="muted">Última sessão · ontem, 18:42</text>
+      <text x="18" y="112" class="label">PRÓXIMO PASSO</text>
+      <text x="172" y="112" class="body">Validar fluxo de pesquisa</text>
+      <circle cx="394" cy="36" r="17" fill="none" stroke="#49d6e8" stroke-opacity=".8"/>
+      <path d="M386 36l6 6 11-14" stroke="#91f7fa" stroke-width="2" fill="none"/>
+    </g>
+    <text x="26" y="374" class="tiny">PAINÉIS MODULARES</text>
+    <g transform="translate(26 393)">
+      <rect width="205" height="123" rx="9" fill="#0b202c" stroke="#23677b"/>
+      <text x="15" y="25" class="tiny">TAREFAS</text>
+      <text x="15" y="58" class="body">03 em andamento</text>
+      <rect x="15" y="76" width="166" height="4" rx="2" fill="#163847"/>
+      <rect x="15" y="76" width="112" height="4" rx="2" fill="#39d8ef"/>
+      <text x="15" y="105" class="muted">2 concluídas hoje</text>
+    </g>
+    <g transform="translate(249 393)">
+      <rect width="205" height="123" rx="9" fill="#0b202c" stroke="#23677b"/>
+      <text x="15" y="25" class="tiny">LEMBRETE</text>
+      <text x="15" y="58" class="body">Revisar o plano</text>
+      <text x="15" y="82" class="muted">Hoje · 16:00</text>
+      <circle cx="177" cy="96" r="5" fill="#ffc16b" filter="url(#glow)"/>
+    </g>
+    <g transform="translate(26 536)">
+      <rect width="428" height="188" rx="10" fill="#091923" stroke="#23677b"/>
+      <text x="18" y="27" class="tiny">CONVERSA / CONTEXTO RECENTE</text>
+      <text x="18" y="62" class="muted">VOCÊ</text>
+      <text x="100" y="62" class="body">O que falta para terminar?</text>
+      <text x="18" y="99" class="label">JARVIS</text>
+      <text x="100" y="99" class="body">Faltam testes da busca e uma</text>
+      <text x="100" y="122" class="body">verificação do fluxo de voz.</text>
+      <rect x="18" y="150" width="392" height="24" rx="12" fill="#102b37" stroke="#28677b"/>
+      <text x="32" y="167" class="muted">Fale ou digite um pedido…</text>
+      <circle cx="391" cy="162" r="7" fill="#50deed"/>
+    </g>
+    <text x="26" y="757" class="tiny">MEMÓRIA E LEMBRETES PODEM SER OCULTADOS</text>
+    <text x="26" y="820" class="tiny">VISUALIZAÇÃO CONCEITUAL · NÃO É UMA CAPTURA DO APP</text>
+  </g>
+
+  <!-- Concept 3: analysis mode -->
+  <g transform="translate(1068 122)">
+    <rect width="480" height="850" rx="18" fill="url(#panel)" stroke="#24748a" stroke-opacity=".8"/>
+    <path d="M18 72H462M18 784H462" class="dim"/>
+    <text x="26" y="39" class="label">03 / MODO ANÁLISE</text>
+    <text x="26" y="61" class="muted">Visualização de dados · fontes · decisões</text>
+    <text x="26" y="104" class="tiny">ANÁLISE DE PROJETO</text>
+    <text x="26" y="142" class="body" font-size="19">Saúde do projeto</text>
+    <text x="26" y="166" class="muted">Resumo com evidências disponíveis</text>
+    <g transform="translate(26 194)">
+      <rect width="428" height="208" rx="10" fill="#0a1c28" stroke="#23677b"/>
+      <text x="18" y="27" class="tiny">PROGRESSO ESTIMADO</text>
+      <circle cx="94" cy="112" r="54" fill="none" stroke="#173a49" stroke-width="12"/>
+      <circle cx="94" cy="112" r="54" fill="none" stroke="#35d8eb" stroke-width="12" stroke-dasharray="226 114" transform="rotate(-90 94 112)"/>
+      <text x="94" y="118" text-anchor="middle" fill="#e1fbff" font-size="22" font-weight="600">67%</text>
+      <text x="180" y="79" class="label">ESTÁVEL</text>
+      <text x="180" y="106" class="body">12 verificações aprovadas</text>
+      <text x="180" y="131" class="body">3 itens para revisar</text>
+      <text x="180" y="168" class="muted">Baseado nos dados compartilhados</text>
+      <text x="180" y="188" class="muted">nesta sessão, não em uma auditoria.</text>
+    </g>
+    <text x="26" y="438" class="tiny">PONTOS DE ATENÇÃO</text>
+    <g transform="translate(26 456)">
+      <rect width="428" height="68" rx="8" fill="#211b13" stroke="#8f6933" stroke-opacity=".8"/>
+      <circle cx="20" cy="24" r="5" fill="#ffc268" filter="url(#glow)"/>
+      <text x="37" y="27" fill="#ffd994" font-size="13">Busca em documentos é limitada</text>
+      <text x="37" y="49" class="muted">Pode não cobrir arquivos grandes ou digitalizados.</text>
+    </g>
+    <g transform="translate(26 536)">
+      <rect width="428" height="68" rx="8" fill="#0b202b" stroke="#23677b"/>
+      <circle cx="20" cy="24" r="5" fill="#59dfeb"/>
+      <text x="37" y="27" class="body">3 arquivos usados como contexto</text>
+      <text x="37" y="49" class="muted">README · assistant.mjs · gemini.mjs</text>
+    </g>
+    <text x="26" y="646" class="tiny">PRÓXIMA AÇÃO SUGERIDA</text>
+    <g transform="translate(26 664)">
+      <rect width="428" height="83" rx="9" fill="#0b2632" stroke="#36b8ce"/>
+      <text x="17" y="29" class="body">Adicionar busca semântica local</text>
+      <text x="17" y="54" class="muted">Impacto alto · esforço médio</text>
+      <path d="M384 41h22m-8-8 8 8-8 8" stroke="#70edfa" stroke-width="1.5" fill="none"/>
+    </g>
+    <text x="26" y="820" class="tiny">FONTES E LIMITAÇÕES SEMPRE VISÍVEIS</text>
+  </g>
+</svg>

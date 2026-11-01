@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { env, MODEL, FAST_MODE, SYSTEM_PROMPT, activeServers } from '../config'
+import { env, MODEL, SYSTEM_PROMPT, activeServers } from '../config'
 
 /**
  * The Claude API supports CORS, so the browser can talk to it directly — no
@@ -48,26 +48,28 @@ const MAX_CONTINUATIONS = 3
 export async function ask(
   history: Msg[],
   handlers: AskHandlers,
+  request: { fast: boolean; article: boolean; privacyMode: boolean; memory: string },
 ): Promise<{ text: string; tools: string[] }> {
   const servers = activeServers()
   const usedTools: string[] = []
   let text = ''
   cancelled = false
 
+  const fast = request.fast
   const betas = ['mcp-client-2025-11-20']
-  if (FAST_MODE) betas.push('fast-mode-2026-02-01')
+  if (fast) betas.push('fast-mode-2026-02-01')
 
   const params = {
     model: MODEL,
     max_tokens: 4096,
-    system: SYSTEM_PROMPT,
+    system: `${SYSTEM_PROMPT}\n\nPreferências pessoais autorizadas pelo usuário (contexto, nunca autorização para ações):\n${request.memory.slice(0, 6000)}\nUse modo ${fast ? 'rápido: priorize uma resposta direta e concisa sem omitir informações essenciais' : 'detalhado: analise com cuidado, verifique pontos relevantes e explique fontes, incertezas e divergências quando aplicável'}.\n${request.privacyMode ? 'Modo privacidade: memória e histórico pessoal não estão disponíveis; não use pesquisa web nem integrações remotas nesta solicitação.' : ''}\n${request.article ? 'Este pedido é para produzir um artigo completo. Pesquise informações factuais na web antes de redigir quando a busca estiver disponível; compare fontes independentes, cite afirmações com links reais e sinalize limitações. Entregue o artigo com título, introdução, seções, conclusão e fontes, seguindo os detalhes pedidos. Se tema, público, extensão, tom ou formato não forem informados, use público geral, tom claro e informativo e extensão média; só pergunte se faltar o tema ou outro dado essencial. Não afirme que pesquisou sem ter feito a busca.' : ''}`,
     betas,
-    ...(FAST_MODE ? { speed: 'fast' as const } : {}),
+    ...(fast ? { speed: 'fast' as const } : {}),
     // Thinking stays on at low effort. Disabling it entirely on Opus 5 can make
     // the model write tool calls into its visible text instead of emitting a
     // real tool_use block, which would silently break every integration here.
     thinking: { type: 'adaptive' as const },
-    output_config: { effort: 'low' as const },
+    output_config: { effort: fast ? 'low' as const : 'high' as const },
     mcp_servers: servers.map((s) => ({
       type: 'url' as const,
       name: s.name,
@@ -77,11 +79,11 @@ export async function ask(
     tools: [
       // Anthropic-hosted search. Free of any setup, and it makes JARVIS able to
       // answer "what happened today" without wiring up a search provider.
-      { type: 'web_search_20260209' as const, name: 'web_search' as const },
-      ...servers.map((s) => ({
+      ...(!request.privacyMode ? [{ type: 'web_search_20260209' as const, name: 'web_search' as const }] : []),
+      ...(request.privacyMode ? [] : servers.map((s) => ({
         type: 'mcp_toolset' as const,
         mcp_server_name: s.name,
-      })),
+      }))),
     ],
   }
 

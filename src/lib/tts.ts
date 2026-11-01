@@ -8,6 +8,7 @@ import {
 } from '../config'
 import * as kokoro from './kokoro'
 import { caps } from './capabilities'
+import { useWorkspace } from '../workspace'
 
 /**
  * Speech output.
@@ -33,6 +34,8 @@ type Speaker = {
   /** Speak a phrase ahead of anything still queued. Used for filler like
    *  "Working on it, sir" while a tool runs. */
   say: (text: string) => void
+  /** Speak a short acknowledgement with the on-device voice, bypassing cloud TTS latency. */
+  sayFast: (text: string) => void
   /** No more text coming — flush the remainder and resolve when audio ends. */
   end: () => Promise<void>
   /** Cut it off mid-sentence (barge-in). Always settles `end()`. */
@@ -62,7 +65,7 @@ const ECHO_TAIL_MS = 1800
  * indistinguishable. This tells them apart at a glance.
  */
 export const diag = {
-  engine: 'system' as 'system' | 'kokoro' | 'elevenlabs',
+  engine: 'system' as 'system' | 'kokoro' | 'elevenlabs' | 'gemini',
   /** Utterances handed to an engine — the OS voice or an audio element. */
   spoken: 0,
   /**
@@ -102,6 +105,7 @@ if (typeof window !== 'undefined') {
  * the bridge's speech proxy instead, which holds an ElevenLabs key already.
  */
 let nativeBroken = false
+let neuralRetryAt = 0
 
 let speakingAt = 0
 
@@ -164,55 +168,24 @@ const MAX_UNSPOKEN = 220
 
 const VOICE_PREF_KEY = 'jarvis.voice'
 
-/**
- * Rank installed voices by how close they are to the character: a British
- * male, low and level, not a novelty voice.
- *
- * The big win on macOS is the Enhanced/Premium variant of Daniel. The stock
- * "Daniel" is a compact voice from a decade ago and sounds it; the Enhanced
- * download is free (System Settings → Accessibility → Spoken Content → System
- * Voice → Manage Voices) and once installed it appears here automatically.
- */
+/** Prefer Brazilian Portuguese voices and higher-quality installed variants. */
 function score(v: SpeechSynthesisVoice): number {
+  if (!/^pt/i.test(v.lang)) return 0
+  let s = /^pt[-_]br$/i.test(v.lang) ? 200 : 100
   const n = v.name.toLowerCase()
-  let s = 0
-
-  // The macOS British male, and the closest thing to the character available
-  // without leaving the machine.
-  if (n.startsWith('daniel')) s += 100
-  else if (n.includes('google uk english male')) s += 85
-  else if (/\b(oliver|arthur|jamie|malcolm)\b/.test(n)) s += 80
-  // Newer macOS en-GB male voices — casual, but serviceable.
-  else if (/\b(reed|rocko|eddy)\b/.test(n)) s += 40
-
-  // Higher-quality variants of whatever matched above.
   if (n.includes('premium')) s += 30
   else if (n.includes('enhanced')) s += 20
-
-  if (/en[-_]gb/i.test(v.lang)) s += 25
-  else if (/^en/i.test(v.lang)) s += 5
-
-  // Voices that clearly aren't a butler.
-  if (/grandma|grandpa|bubbles|jester|bells|boing|whisper|zarvox|superstar|trinoids|wobble|bahh|organ|cellos|bad news|good news/.test(n)) {
-    s -= 200
-  }
-  // Female-presenting names across the English sets.
-  if (/\b(flo|sandy|shelley|kate|serena|fiona|moira|karen|tessa|samantha|zoe|allison|ava|susan)\b/.test(n)) {
-    s -= 60
-  }
-
+  if (v.localService) s += 5
   return s
 }
 
-/** Only voices that scored on a name match, not merely on being English —
- *  otherwise the picker cycles through a dozen US novelty voices. */
-const USABLE = 40
+const USABLE = 100
 
 /** Best-first list of usable voices — also what the voice picker cycles. */
 export function candidateVoices(): SpeechSynthesisVoice[] {
   return speechSynthesis
     .getVoices()
-    .filter((v) => /^en/i.test(v.lang))
+    .filter((v) => /^pt/i.test(v.lang))
     .map((v) => ({ v, s: score(v) }))
     .filter((x) => x.s >= USABLE)
     .sort((a, b) => b.s - a.s)
@@ -232,11 +205,11 @@ function pickVoice(): SpeechSynthesisVoice | null {
   const saved = localStorage.getItem(VOICE_PREF_KEY)
   if (saved) {
     const hit = all.find((v) => v.name === saved)
-    if (hit) return (cachedVoice = hit)
+    if (hit && /^pt/i.test(hit.lang)) return (cachedVoice = hit)
     localStorage.removeItem(VOICE_PREF_KEY)
   }
 
-  cachedVoice = candidateVoices()[0] ?? all.find((v) => /^en/i.test(v.lang)) ?? null
+  cachedVoice = candidateVoices()[0] ?? null
   return cachedVoice
 }
 
@@ -244,6 +217,7 @@ function pickVoice(): SpeechSynthesisVoice | null {
  *  always naming a speechSynthesis voice that a cloud or neural engine has
  *  quietly replaced. */
 export function currentVoiceName(): string {
+  if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) return `Gemini · ${useWorkspace.getState().settings.neuralVoice}`
   if (USE_ELEVENLABS || caps().tts) return 'ElevenLabs'
   if (TTS_ENGINE === 'kokoro' && !kokoro.isUnavailable()) {
     return KOKORO_VOICE.replace(/^bm_/, '')
@@ -300,12 +274,10 @@ function outputContext(): AudioContext | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Nudge the delivery toward JARVIS's cadence.
+ * Remove formatting that would make speech awkward.
  *
  * speechSynthesis ignores SSML, so punctuation is the only prosody control
- * available — the engine pauses on commas and full stops. Making sure the
- * vocative "sir" is always set off by a comma buys the small beat before it
- * that does most of the characterisation.
+ * available. Do not add punctuation that creates pauses not present in the text.
  */
 function shape(text: string): string {
   return (
@@ -320,10 +292,6 @@ function shape(text: string): string {
       .replace(/https?:\/\/[^\s]*[^\s.,;:!?)\]]/g, '')
       .replace(/[*_`#>]+/g, '')
       .replace(/^\s*[-•]\s+/gm, '')
-      // The vocative wants its comma — that small beat before "sir" does most
-      // of the characterisation. Anchored to a following pause or end of line
-      // so the honorific is left alone: "Sir Isaac Newton" is not a vocative.
-      .replace(/([^,\s])\s+(sir)(\s*[.,!?;:]|\s*$)/gi, '$1, $2$3')
       .replace(/\s+/g, ' ')
       .trim()
   )
@@ -331,11 +299,13 @@ function shape(text: string): string {
 
 type Item = {
   text: string
+  native?: boolean
   /** Generation starts one sentence ahead, not all at once. */
   audio?: Promise<string | null> | null
 }
 
 export function createSpeaker(): Speaker {
+  const controller = new AbortController()
   const queue: Item[] = []
   let buffer = ''
   let cancelled = false
@@ -344,6 +314,7 @@ export function createSpeaker(): Speaker {
 
   let currentAudio: HTMLAudioElement | null = null
   let nativeInFlight = false
+  let activeFinish: (() => void) | null = null
   let drained: Array<() => void> = []
 
   const settleDrained = () => {
@@ -352,14 +323,14 @@ export function createSpeaker(): Speaker {
     for (const r of waiting) r()
   }
 
-  const enqueue = (sentence: string, priority = false) => {
+  const enqueue = (sentence: string, priority = false, native = false) => {
     if (cancelled) return
     // Shape once here so both engines get the same text — stripped markdown,
     // and the comma before "sir" that buys the beat.
     const text = shape(sentence)
     if (!text) return
 
-    const item: Item = { text }
+    const item: Item = { text, native, ...(native ? { audio: null } : {}) }
     if (priority) {
       // Genuinely ahead of the queue this time. The old `say()` appended to the
       // same chain and only appeared to preempt because it was called when the
@@ -373,6 +344,19 @@ export function createSpeaker(): Speaker {
 
   /** null means "no audio pipeline, use the system voice directly". */
   function synthesise(text: string): Promise<string | null> | null {
+    if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) {
+      diag.engine = 'gemini'
+      return fetch(`${BRIDGE_HTTP_URL}/voice`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text, voice: useWorkspace.getState().settings.neuralVoice }), signal: controller.signal,
+      }).then(async (response) => {
+        if (!response.ok) throw new Error('Voz neural indisponível.')
+        const blob = await response.blob()
+        return cancelled ? null : URL.createObjectURL(blob)
+      }).catch(() => {
+        if (!cancelled) { neuralRetryAt = Date.now() + 60000; diag.lastError = 'voz-neural-indisponível' }
+        return null
+      })
+    }
     // Prefer the ElevenLabs voice whenever the bridge reports it is available —
     // for a demo the timbre is worth the round trip, and this is what makes the
     // premium path automatic with no flag to set. It falls back to the browser
@@ -397,7 +381,7 @@ export function createSpeaker(): Speaker {
 
   /** Start generating an item's audio if it hasn't begun. */
   const prime = (item: Item | undefined) => {
-    if (item && item.audio === undefined) item.audio = synthesise(item.text)
+    if (item && item.audio === undefined) item.audio = item.native ? null : synthesise(item.text)
   }
 
   async function pump(): Promise<void> {
@@ -435,6 +419,7 @@ export function createSpeaker(): Speaker {
         return
       }
 
+      diag.engine = 'system'
       const spoke = await speakNative(item.text)
       if (spoke || cancelled) return
 
@@ -477,15 +462,16 @@ export function createSpeaker(): Speaker {
       const u = new SpeechSynthesisUtterance(text)
       const voice = pickVoice()
       if (voice) u.voice = voice
-      u.lang = voice?.lang ?? 'en-GB'
+      u.lang = voice?.lang ?? 'pt-BR'
       // Deliberate, and deliberately invariant — the character's pace does not
       // change with stakes, and that steadiness is most of the effect. This
       // lands around 130 wpm, below the median for film dialogue.
-      u.rate = 0.92
+      u.rate = useWorkspace.getState().settings.voiceRate
+      u.volume = useWorkspace.getState().settings.voiceVolume
       // Mid-baritone, and *not* pushed lower for gravitas. The voice is
       // clarity-weighted rather than chest-weighted; dropping it further reads
       // as a film-trailer voiceover, which is the wrong character entirely.
-      u.pitch = 0.95
+      u.pitch = 1
 
       // speechSynthesis exposes no amplitude, so drive the reactor from a
       // synthetic envelope. It only has to look like speech, not match it.
@@ -509,6 +495,7 @@ export function createSpeaker(): Speaker {
       const finish = () => {
         if (done) return
         done = true
+        if (activeFinish === finish) activeFinish = null
         nativeInFlight = false
         if (watchdog) clearTimeout(watchdog)
         if (keepalive) clearInterval(keepalive)
@@ -519,6 +506,7 @@ export function createSpeaker(): Speaker {
         // The whole point of the boolean: `true` only if sound actually began.
         resolve(started)
       }
+      activeFinish = finish
 
       u.onstart = () => {
         started = true
@@ -528,11 +516,11 @@ export function createSpeaker(): Speaker {
         // Chrome stops speaking after roughly fifteen seconds unless the engine
         // is nudged. A pause/resume pair is the standard keepalive and is
         // inaudible; without it long answers cut off mid-sentence.
-        keepalive = setInterval(() => {
-          if (done) return
+        if (!voice?.localService) keepalive = setInterval(() => {
+          if (done || !speechSynthesis.speaking) return
           speechSynthesis.pause()
           speechSynthesis.resume()
-        }, 5000)
+        }, 7000)
       }
       u.onend = finish
       // Swallowing this was a mistake. When the OS voice fails there is no
@@ -584,6 +572,8 @@ export function createSpeaker(): Speaker {
   const playUrl = (url: string, text: string) =>
     new Promise<void>((resolve) => {
       const audio = new Audio(url)
+      audio.volume = useWorkspace.getState().settings.voiceVolume
+      audio.playbackRate = useWorkspace.getState().settings.voiceRate
       currentAudio = audio
       // The generated path is an engine speaking just as much as the OS voice
       // is, so it keeps the same books. `spoken` counts the hand-off, `started`
@@ -624,12 +614,14 @@ export function createSpeaker(): Speaker {
       const finish = () => {
         if (done) return
         done = true
+        if (activeFinish === finish) activeFinish = null
         cancelAnimationFrame(raf)
         outLevel = 0.12
         URL.revokeObjectURL(url)
         if (currentAudio === audio) currentAudio = null
         resolve()
       }
+      activeFinish = finish
       // Sound is genuinely coming out. This is the cloud/neural counterpart of
       // SpeechSynthesisUtterance.onstart, and it is what makes the diagnostics
       // verdict — and the T self-test — tell the truth on the premium path.
@@ -661,6 +653,9 @@ export function createSpeaker(): Speaker {
     say(text) {
       enqueue(text, true)
     },
+    sayFast(text) {
+      enqueue(text, true, true)
+    },
     push(delta) {
       if (cancelled) return
       buffer += delta
@@ -671,6 +666,7 @@ export function createSpeaker(): Speaker {
         if (!m) break
         const cut = m.index + m[0].length
         const candidate = buffer.slice(0, cut)
+        // Start a complete sentence immediately instead of waiting to group it.
         // "Mr. Stark" is not two sentences. Leave the text in the buffer and
         // wait for a boundary that actually ends something.
         if (ABBREVIATION.test(candidate.trimEnd())) {
@@ -709,7 +705,9 @@ export function createSpeaker(): Speaker {
     cancel() {
       if (cancelled) return
       cancelled = true
+      controller.abort()
       buffer = ''
+      queue.forEach((item) => { if (item.audio) void item.audio.then((url) => { if (url) URL.revokeObjectURL(url) }) })
       queue.length = 0
       // Keep the echo tail: the words already in the air still have to be
       // recognised and discarded, even though he has stopped adding to them.
@@ -729,6 +727,7 @@ export function createSpeaker(): Speaker {
         currentAudio.pause()
         currentAudio = null
       }
+      activeFinish?.()
       outLevel = 0
       settleDrained()
     },

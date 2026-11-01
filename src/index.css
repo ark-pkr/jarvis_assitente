@@ -1,5 +1,111 @@
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;600&family=JetBrains+Mono:wght@300;400&display=swap');
 
+/* Conversation controls stay readable over the animated scene. */
+.voice-console {
+  position: absolute; z-index: 50; bottom: 58px; left: 50%; transform: translateX(-50%);
+  width: min(680px, calc(100vw - 40px)); padding: 16px 20px; pointer-events: auto;
+  border: 1px solid #29717f; border-radius: 14px; background: #07151ff5;
+  box-shadow: 0 12px 50px #0009; color: #ecf9ff; text-transform: none;
+  letter-spacing: normal; font-size: 14px;
+}
+.voice-console.is-listening { border-color: #68eacb; box-shadow: 0 0 24px #28dfbd26; }
+.voice-status { display: flex; align-items: center; gap: 9px; font-weight: 600; }
+.connection-status { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 8px 0; font-size: 11px; color: #ffc987; }
+.connection-status span::before { content: '●'; margin-right: 5px; }
+.connection-status [data-ok='true'] { color: #9bdfce; }
+.connection-status.detailed { display: grid; font-size: 14px; gap: 14px; }
+.connection-status p { color: #a9c6d5; line-height: 1.6; }
+.workspace-open { position: fixed; top: 84px; right: 5%; z-index: 10; padding: 8px 12px; color: #d5f6ff;
+  border: 1px solid #367080; border-radius: 6px; background: #071c29; cursor: pointer; font: inherit; font-size: 13px; }
+.workspace-panel { position: fixed; z-index: 75; top: 16px; right: 16px; bottom: 16px; width: min(560px, calc(100vw - 32px));
+  overflow-y: auto; background: #071522; color: #e5f6ff; padding: 22px; border: 1px solid #45818d; border-radius: 14px; box-shadow: 0 0 100px #000a; }
+.workspace-panel header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.workspace-panel h2 { margin: 0; font-size: 22px; }
+.workspace-panel h3 { font-size: 17px; margin-top: 24px; }
+.workspace-panel nav, .workspace-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.workspace-panel button, .approval-card button { border: 1px solid #3e7184; border-radius: 6px; background: #163446;
+  color: #e1f9ff; font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; }
+.workspace-panel button[aria-pressed='true'], .session-list .selected { background: #215167; }
+.workspace-panel p { font-size: 14px; line-height: 1.65; color: #c2d8e2; overflow-wrap: anywhere; }
+.workspace-panel input:not([type='checkbox']), .workspace-panel textarea { box-sizing: border-box; width: 100%; background: #020e18;
+  color: #e5f6ff; padding: 10px; border: 1px solid #3e7184; border-radius: 6px; font: inherit; }
+.workspace-panel input[type='range'] { padding: 10px 0; accent-color: #7ee4dc; }
+.workspace-panel textarea { resize: vertical; margin-bottom: 12px; }
+.workspace-panel select { width: 100%; padding: 10px; margin-top: 7px; border: 1px solid #3e7184; border-radius: 6px; background: #071522; color: #e5f6ff; font: inherit; }
+.workspace-panel progress { width: 100%; height: 12px; accent-color: #75ddd4; }
+.learning-topics { display: grid; gap: 8px; margin: 18px 0; max-height: 330px; overflow-y: auto; }
+.learning-topics > div { display: flex; gap: 8px; align-items: center; padding: 6px; border: 1px solid #234755; border-radius: 8px; }
+.learning-topics button { flex: 1; text-align: left; }
+.learning-topics small { display: block; color: #b7d4df; margin-top: 5px; line-height: 1.4; }
+.learning-topics label { font-size: 11px; margin: 0 4px; white-space: nowrap; }
+.workspace-panel label { display: block; margin: 20px 0; }
+.workspace-panel .setting-check { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.workspace-panel .danger { background: #3e1d2a; border-color: #c57481; }
+.workspace-panel :focus-visible, .approval-card :focus-visible { outline: 2px solid #f2d694; outline-offset: 3px; }
+.session-list { display: grid; gap: 8px; max-height: 240px; overflow-y: auto; margin-top: 16px; }
+.session-list > div { display: flex; align-items: center; gap: 8px; border: 1px solid #214659; border-radius: 6px; padding: 5px; }
+.session-list > div > button:first-child { flex: 1; min-width: 0; text-align: left; border: none; background: transparent; }
+.session-list b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-list small { display: block; color: #a8cbdc; margin-top: 5px; font-size: 11px; }
+.history-messages article { padding: 14px 0; border-bottom: 1px solid #285063; }
+.history-messages article b { color: #75d9df; font-size: 12px; }
+.history-messages p { white-space: pre-wrap; }
+.approval-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: #000b; }
+.approval-card { width: min(560px, 100%); max-height: 85vh; overflow-y: auto; border: 1px solid #e3b465; background: #0b1e2b;
+  border-radius: 14px; padding: 26px; color: #effaff; box-shadow: 0 20px 100px #000; }
+.approval-card h2 { font-size: 22px; margin-top: 0; }
+.approval-card p { line-height: 1.6; }
+.approval-card .approval-details { white-space: pre-wrap; padding: 14px; background: #020f1b; overflow-wrap: anywhere; }
+.approval-card .approval-url { color: #ffd18b; overflow-wrap: anywhere; }
+.approval-card > div { display: flex; gap: 10px; justify-content: flex-end; }
+.approval-card button:last-child { background: #f6cd84; color: #18222c; border-color: #f6cd84; }
+.voice-indicator { width: 8px; height: 8px; border-radius: 50%; background: #77b8cb; flex-shrink: 0; }
+.is-listening .voice-indicator { background: #68eacb; box-shadow: 0 0 10px #68eacb; }
+.voice-indicator.is-busy { background: #ffc973; }
+.voice-heard { margin: 10px 0 12px; }
+.voice-heard > span { font-size: 11px; color: #9ac4d2; }
+.voice-heard p { margin: 4px 0 0; line-height: 1.45; max-height: 62px; overflow: auto; overflow-wrap: anywhere; }
+.voice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.voice-console button { cursor: pointer; min-height: 40px; border-radius: 7px; padding: 8px 14px;
+  border: 1px solid #386373; color: #e2f5ff; background: #102c3a; font: inherit; }
+.voice-console .voice-talk { color: #031820; background: #77e6ef; border-color: #77e6ef; font-weight: 600; }
+.voice-console button:hover:not(:disabled) { filter: brightness(1.2); }
+.voice-console button:disabled { opacity: .45; cursor: not-allowed; }
+.voice-console :focus-visible { outline: 2px solid #ffe0a1; outline-offset: 3px; }
+.voice-text-form { display: flex; gap: 8px; margin-top: 10px; }
+.voice-text-form input { min-width: 0; flex: 1; padding: 9px 12px; border: 1px solid #386373;
+  border-radius: 7px; color: #fff; background: #030f18; font: inherit; }
+.voice-text-form input::placeholder { color: #94b4c1; }
+.hud .log { bottom: 106px; max-height: min(30vh, 250px); overflow-y: auto; pointer-events: auto;
+  padding: 14px 18px; border-radius: 10px; background: #06111de8; }
+.hud .log:empty { display: none; }
+.hud .log-user .log-text { opacity: .88; }
+.hud .log-text { line-height: 1.55; font-size: 16px; color: #ecf9ff; }
+.hud .log-line { flex-shrink: 0; }
+.hud .caption { display: none; }
+.hud .error { z-index: 51; bottom: 62px; padding: 12px 18px; border: 1px solid #a94b57;
+  border-radius: 8px; background: #2a1019f5; color: #ffd4da; font-size: 14px; }
+.hud .hud-bottom { opacity: .8; bottom: 24px; }
+.hud .rail-title, .hud .status, .hud .brand-sub { opacity: .85; }
+.hud .bl { background: #06131df5; }
+.hud .bl-markup { font-size: 16px; line-height: 1.6; color: #e2f5ff; }
+.hud .bl-markup :is(h1, h2, h3, h4) { margin: 1.25em 0 0.55em; line-height: 1.25; color: #fff; }
+.hud .bl-markup h1 { font-size: 1.55em; }
+.hud .bl-markup h2 { font-size: 1.3em; }
+.hud .bl-markup :is(h3, h4) { font-size: 1.08em; }
+.hud .bl-markup p { margin: 0.75em 0; }
+.hud .bl-markup a { color: #7de8ff; }
+.hud .bl-hint { bottom: 294px; }
+@media (max-width: 700px) {
+  .voice-console { bottom: 46px; padding: 12px; }
+  .hud .log { width: calc(100vw - 32px); bottom: 90px; max-height: 25vh; }
+  .hud .hud-top { padding: 0 24px; top: 24px; }
+  .hud .brand-sub, .hud .rail { display: none; }
+  .hud .brand-mark { font-size: 14px; letter-spacing: .22em; }
+  .hud .status { max-width: 48%; font-size: 9px; }
+  .hud .hud-bottom { font-size: 8px; padding: 0 16px; bottom: 14px; }
+}
+
 :root {
   /* The interface cyan. `--accent` is re-declared per phase and per panel;
      this one stays put and is what anything neutral pins itself to. */
@@ -46,6 +152,69 @@ body::after {
   inset: 0;
   z-index: 1;
 }
+.helios-scene { width: 100%; height: 100%; border: 0; background: #020712; }
+
+.scene-light { display: grid; place-items: center; background: radial-gradient(ellipse at center, #211006 0, #090503 43%, #010101 76%); }
+.scene-light[data-theme='sphere'] { background: radial-gradient(ellipse at 50% 48%, #251407 0, #100a06 34%, #030303 74%); }
+.scene-light[data-theme='sphere'] .holo-grid { opacity: .045; }
+.neural-sphere { position: relative; width: min(68vw, 68vh, 620px); aspect-ratio: 1; transform: scale(var(--reactor-scale, 1)); transition: transform .5s; }
+.neural-sphere::before { content: ''; position: absolute; inset: 12%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, #ffae4921, #e77a1710 45%, transparent 72%); filter: blur(25px); }
+.neural-sphere-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sphere-readout { position: absolute; left: 20%; right: 20%; top: 87%; display: grid; justify-items: center; gap: 7px;
+  color: #ffe4ae; font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 13px #fa9b40a8; pointer-events: none; }
+.sphere-readout small { font-size: clamp(7px, .75vw, 10px); letter-spacing: .24em; opacity: .7; }
+.sphere-readout b { font-size: clamp(9px, 1vw, 13px); font-weight: 400; letter-spacing: .15em; }
+.sphere-wave { display: flex; justify-content: center; align-items: center; gap: 4px; height: 17px; }
+.sphere-wave i { display: block; width: 2px; height: 12px; background: #ffce80; opacity: .8; transform: scaleY(.22); }
+.light-reactor-speaking .sphere-wave i, .light-reactor-listening .sphere-wave i { animation: holo-wave .9s ease-in-out infinite alternate; }
+.light-reactor-thinking .neural-sphere-canvas, .light-reactor-tooling .neural-sphere-canvas { filter: brightness(1.16); }
+.light-reactor { position: relative; width: min(48vw, 48vh, 460px); aspect-ratio: 1; color: var(--reactor-color);
+  transform: scale(var(--reactor-scale, 1)); transition: color .4s, transform .5s; }
+.light-ring { position: absolute; inset: 0; border: 2px solid currentColor; border-radius: 50%;
+  box-shadow: 0 0 18px currentColor, inset 0 0 12px currentColor; }
+.light-ring.outer { border-top-color: transparent; border-bottom-color: transparent; animation: light-spin 24s linear infinite; }
+.light-ring.inner { inset: 10%; border-width: 1px; opacity: .65; }
+.light-reactor-core { position: absolute; inset: 25%; overflow: hidden; border: 1px solid #ffc66d99; border-radius: 50%;
+  opacity: .88; background: radial-gradient(circle at 49% 47%, #fff8d8 0 1.5%, #ffd36b 4%, #ff9a36 10%, #a84313 27%, #331204 50%, #100703 68%, transparent 72%);
+  box-shadow: 0 0 28px #ff8a2c88, inset 0 0 35px #ffb13a55; animation: plasma-breathe 5s ease-in-out infinite; }
+.light-reactor-core::before, .light-reactor-core::after { content: ''; position: absolute; inset: 7%; border: 1px solid #ffd78a70;
+  border-radius: 50%; background: repeating-conic-gradient(from 12deg, transparent 0deg 8deg, #ffc35a33 8.3deg 8.8deg, transparent 9deg 17deg);
+  mask-image: radial-gradient(circle, transparent 30%, #000 48%, #000 70%, transparent 72%); animation: plasma-spin 32s linear infinite; }
+.light-reactor-core::after { inset: 18%; border-color: #ff9c3c80; background: repeating-conic-gradient(from 4deg, transparent 0deg 18deg, #ffd17855 18.5deg 19deg, transparent 19.5deg 36deg);
+  animation-duration: 19s; animation-direction: reverse; }
+.holo-grid { position: absolute; inset: 0; pointer-events: none; opacity: .12;
+  background-image: linear-gradient(#a95b2635 1px, transparent 1px), linear-gradient(90deg, #a95b2635 1px, transparent 1px);
+  background-size: 70px 70px; mask-image: radial-gradient(ellipse, #000, transparent 70%); }
+.light-reactor { width: min(58vw, 57vh, 550px); }
+.holo-particles { position: absolute; inset: -19%; border-radius: 50%; opacity: .48; animation: plasma-spin 95s linear infinite;
+  background-image: radial-gradient(#ffd27a 1px, transparent 2px), radial-gradient(#ff7b27 1.4px, transparent 2.5px), radial-gradient(#fff0ba 1px, transparent 2px);
+  background-position: 0 0, 13px 19px, 28px 11px; background-size: 41px 43px, 61px 67px, 97px 83px; mask-image: radial-gradient(circle, transparent 37%, #000 48%, #000 66%, transparent 76%); }
+.holo-ticks { position: absolute; inset: -5%; border-radius: 50%; opacity: .52;
+  background: repeating-conic-gradient(currentColor 0deg 1deg, transparent 1deg 6deg);
+  mask-image: radial-gradient(circle, transparent 67%, #000 67.5%, #000 69%, transparent 69.5%); }
+.light-ring.outer { border-width: 2px; box-shadow: 0 0 22px currentColor, inset 0 0 16px currentColor; }
+.holo-orbit { position: absolute; inset: 6%; border: 1px dashed #ffc46a; border-radius: 50%; opacity: .58; animation: light-spin 36s linear infinite reverse; }
+.holo-orbit::after { content: ''; position: absolute; top: 12%; left: 12%; width: 6px; height: 6px; border-radius: 50%; background: #fff0bc; box-shadow: 0 0 13px #ff9e38; }
+.holo-reticle { position: absolute; inset: 19%; border: 1px solid currentColor; border-radius: 50%; opacity: .5; }
+.holo-reticle::before, .holo-reticle::after { content: ''; position: absolute; inset: -4%; border: 1px solid currentColor; clip-path: polygon(0 0, 26% 0, 26% 2%, 2% 2%, 2% 26%, 0 26%); }
+.holo-reticle::after { transform: rotate(180deg); }
+.holo-readout { position: absolute; left: 15%; right: 15%; top: 52%; text-align: center; display: grid; gap: 8px; font-family: 'JetBrains Mono', monospace; }
+.holo-readout small { font-size: clamp(7px, .8vw, 10px); letter-spacing: .22em; opacity: .6; }
+.holo-readout b { font-size: clamp(10px, 1.1vw, 15px); font-weight: 400; letter-spacing: .12em; }
+.holo-wave { display: flex; justify-content: center; align-items: center; gap: 4px; height: 20px; }
+.holo-wave i { display: block; width: 3px; height: 15px; background: currentColor; opacity: .7; transform: scaleY(.2); }
+.light-reactor-speaking .holo-wave i, .light-reactor-listening .holo-wave i { animation: holo-wave .9s ease-in-out infinite alternate; }
+@keyframes holo-wave { from { transform: scaleY(.2); } to { transform: scaleY(1); } }
+.light-reactor-thinking .outer, .light-reactor-tooling .outer { animation-duration: 9s; }
+.light-reactor-listening .light-reactor-core { animation-duration: 2.2s; filter: brightness(1.12); }
+.light-reactor-thinking .light-reactor-core, .light-reactor-tooling .light-reactor-core { animation-duration: 1.7s; filter: brightness(1.24); }
+.light-reactor-speaking .light-reactor-core { animation-duration: 1.1s; filter: brightness(1.16); }
+.scene-light[data-paused='true'] * { animation-play-state: paused; }
+@keyframes light-spin { to { transform: rotate(360deg); } }
+@keyframes plasma-spin { to { transform: rotate(360deg); } }
+@keyframes plasma-breathe { 0%, 100% { transform: scale(.97); } 50% { transform: scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { .light-ring.outer, .holo-orbit, .holo-wave i, .sphere-wave i, .holo-particles, .light-reactor-core, .light-reactor-core::before, .light-reactor-core::after { animation: none !important; } }
 
 /* --------------------------------------------------------------------- HUD */
 
@@ -1896,3 +2065,12 @@ kbd {
   transform: scaleX(-1);
   background: #000;
 }
+/* Dedicated assistant dashboard and reminders. */
+.assistant-entry { margin: 14px 0; padding: 14px; border: 1px solid #23616b; border-radius: 10px; overflow-wrap: anywhere; }
+.assistant-entry small { display: block; margin-top: 6px; color: #9dbfc5; }
+.assistant-entry p { white-space: pre-wrap; }
+.assistant-alerts { position: fixed; z-index: 150; top: 80px; left: 20px; max-width: min(420px, calc(100vw - 40px)); background: #071e29; border: 1px solid #36d7b7; border-radius: 10px; padding: 14px; color: #d8f7ef; }
+.assistant-alerts div { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.approval-overlay { position: fixed; inset: 0; z-index: 220; display: grid; place-items: center; background: #000b; padding: 20px; }
+.approval-overlay .approval-card { width: min(620px, 100%); box-sizing: border-box; }
+.approval-card textarea { box-sizing: border-box; width: 100%; padding: 12px; margin: 12px 0; border: 1px solid #3e7184; border-radius: 6px; color: #e5f6ff; background: #071522; font: inherit; resize: vertical; }

@@ -21,7 +21,7 @@ const samples = new Map<Cue, AudioBuffer>()
 let ambient: { source: AudioBufferSourceNode; gain: GainNode } | null = null
 
 /** Where the master sits when JARVIS isn't speaking. */
-let volume = 0.5
+let volume = 0.16
 let ducked = false
 /** How far everything this module makes drops under the voice. */
 const DUCK = 0.45

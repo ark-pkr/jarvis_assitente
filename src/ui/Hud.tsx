@@ -6,16 +6,17 @@ import { BladeSweep, Blades } from './Blades'
 import { Effects } from './Effects'
 import { Pointer } from './Pointer'
 import { GestureGuide } from './GestureGuide'
+import { useWorkspace } from '../workspace'
 
 const statusText: Record<Phase, string> = {
-  offline: 'OFFLINE',
-  boot: 'INITIALISING',
-  dormant: 'STANDBY — SAY “HEY JARVIS”',
-  waking: 'ONLINE',
-  listening: 'LISTENING',
-  thinking: 'PROCESSING',
-  tooling: 'ACCESSING SYSTEMS',
-  speaking: 'RESPONDING',
+  offline: 'DESLIGADO',
+  boot: 'INICIANDO',
+  dormant: 'EM ESPERA — DIGA “OI JARVIS”',
+  waking: 'PRONTO PARA OUVIR',
+  listening: 'OUVINDO',
+  thinking: 'PROCESSANDO',
+  tooling: 'CONSULTANDO FERRAMENTAS',
+  speaking: 'RESPONDENDO',
 }
 
 function Corner({ at }: { at: 'tl' | 'tr' | 'bl' | 'br' }) {
@@ -146,14 +147,22 @@ function DecodeText({ text }: { text: string }) {
 
 /* --------------------------------------------------------------------- hud */
 
+function SignalMeter() {
+  const level = useStore((s) => s.level)
+  return <aside className="rail rail-right">
+    <div className="rail-title">SINAL</div>
+    <div className="meter"><div className="meter-fill" style={{ height: `${level * 100}%` }} /></div>
+    <div className="rail-item mono">{(level * 100).toFixed(0).padStart(3, '0')}%</div>
+  </aside>
+}
+
 export function Hud() {
+  const inlineMarkup = useWorkspace((s) => s.settings.mode !== 'assistente')
   const phase = useStore((s) => s.phase)
-  const caption = useStore((s) => s.caption)
   const turns = useStore((s) => s.turns)
   const activeTool = useStore((s) => s.activeTool)
   const connected = useStore((s) => s.connected)
   const error = useStore((s) => s.error)
-  const level = useStore((s) => s.level)
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
   const gestures = useStore((s) => s.gestures)
@@ -191,7 +200,7 @@ export function Hud() {
         {ui.chrome.brand && (
           <div className="brand">
             <span className="brand-mark">J.A.R.V.I.S.</span>
-            <span className="brand-sub">Just A Rather Very Intelligent System</span>
+            <span className="brand-sub">SISTEMA DE INTELIGÊNCIA PESSOAL</span>
           </div>
         )}
 
@@ -210,8 +219,8 @@ export function Hud() {
       {/* Left rail: which integrations are live */}
       {ui.chrome.systems && (
         <aside className="rail rail-left">
-          <div className="rail-title">SYSTEMS</div>
-          {connected.length === 0 && <div className="rail-item dim">none linked</div>}
+          <div className="rail-title">SISTEMAS</div>
+          {connected.length === 0 && <div className="rail-item dim">conectando…</div>}
           {connected.map((c) => (
             <div key={c} className="rail-item">
               <span className="tick" />
@@ -220,19 +229,13 @@ export function Hud() {
           ))}
           <div className="rail-item">
             <span className="tick" />
-            Web
+            Navegação
           </div>
         </aside>
       )}
 
       {/* Right rail: live telemetry, mostly for flavour */}
-      <aside className="rail rail-right">
-        <div className="rail-title">SIGNAL</div>
-        <div className="meter">
-          <div className="meter-fill" style={{ height: `${level * 100}%` }} />
-        </div>
-        <div className="rail-item mono">{(level * 100).toFixed(0).padStart(3, '0')}%</div>
-      </aside>
+      <SignalMeter />
 
       <AnimatePresence>
         {activeTool && ui.chrome.toolBadge && (
@@ -253,7 +256,7 @@ export function Hud() {
           >
             <span className="tool-kicker">
               <span className="spinner" />
-              accessing
+              acessando
             </span>
             <span className="tool-name">{activeTool.replace(/[_-]/g, ' ')}</span>
           </motion.div>
@@ -273,7 +276,7 @@ export function Hud() {
                 exit={{ opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               >
-                <span className="log-who">{t.role === 'user' ? 'YOU' : 'JARVIS'}</span>
+                <span className="log-who">{t.role === 'user' ? 'VOCÊ' : 'JARVIS'}</span>
                 {/* Only his half decodes. What the user said was never
                     transmitted from anywhere — dressing it up as machine
                     output would be a lie about where the words came from. */}
@@ -286,37 +289,25 @@ export function Hud() {
         </div>
       )}
 
-      <AnimatePresence>
-        {caption && (
-          <motion.div
-            className="caption"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {caption}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* The one surface. Panels used to sit alongside this as a second place
           for things to appear, which meant two places to look and a decision
           the model had to make on grounds it could not know. Everything renders
           here now; Panels.tsx is unmounted rather than deleted so the design
           system it documents stays findable. */}
-      <Blades />
+      <Blades inlineMarkup={inlineMarkup} />
 
       {ui.chrome.suggestions && <Suggestions />}
 
-      {error && <div className="error">{error}</div>}
+      {error && <div className="error" role="alert">{error}</div>}
+
 
       <footer className="hud-bottom">
         <span className="hint">
-          say <b>“hey jarvis”</b> · <kbd>Space</kbd> to talk · <kbd>G</kbd> hands
+          conversa por voz · <kbd>Esc</kbd> colocar em espera · <kbd>Espaço</kbd> ativar · <kbd>G</kbd> gestos
           {voice && (
             <>
               {' · '}
-              <kbd>V</kbd> voice: {voice.replace(/\(.*?\)/g, '').trim()}
+              <kbd>V</kbd> voz: {voice.replace(/\(.*?\)/g, '').trim()}
             </>
           )}
         </span>
@@ -329,10 +320,10 @@ export function Hud() {
 
       {/* Above even the effects: the reticle shows where a press will land, and
           a press that lands under a flourish is a press you cannot aim. */}
-      <Pointer />
+      {gestures && <Pointer />}
       {(gestures || looking) && (
         <div className="hands-live">
-          {looking ? `LOOKING — ${looking.toUpperCase()}` : 'CAMERA ON · G TO STOP'}
+          {looking ? `OBSERVANDO — ${looking.toUpperCase()}` : 'CÂMERA LIGADA · G PARA DESLIGAR'}
         </div>
       )}
       <GestureGuide live={gestures} />

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStore, type Blade } from '../store'
 import { BRIDGE_HTTP_URL } from '../config'
-import { sanitisePanelHtml } from './sanitise'
+import { openResearchLink, sanitisePanelHtml } from './sanitise'
 import { frameSpan, peaceScroll, pinchCount } from '../lib/hands'
 import * as camera from '../lib/camera'
 
@@ -227,6 +227,7 @@ const Body = memo(function Body({ blade }: { blade: Blade }) {
     return (
       <div
         className="bl-markup p-body"
+        onClick={openResearchLink}
         dangerouslySetInnerHTML={{ __html: sanitisePanelHtml(blade.html) }}
       />
     )
@@ -536,7 +537,7 @@ function Card({
                   setSize(null)
                   setPos({ x: 0, y: 0 })
                 }}
-                title="Back where it started"
+                title="Restaurar posição"
               >
                 ⤾
               </button>
@@ -547,7 +548,7 @@ function Card({
                 e.stopPropagation()
                 onExpand()
               }}
-              title={expanded ? 'Shrink (E)' : 'Full screen (E)'}
+              title={expanded ? 'Reduzir (E)' : 'Tela cheia (E)'}
             >
               {expanded ? '⤡' : '⤢'}
             </button>
@@ -557,7 +558,7 @@ function Card({
                 e.stopPropagation()
                 onClose()
               }}
-              title="Close (X)"
+              title="Fechar (X)"
             >
               ✕
             </button>
@@ -569,7 +570,7 @@ function Card({
         </div>
 
         {/* Resize grip. Absent while expanded, where the size is the point. */}
-        {!expanded && <span className="bl-grip" onPointerDown={onGrip} title="Drag to resize" />}
+        {!expanded && <span className="bl-grip" onPointerDown={onGrip} title="Arraste para redimensionar" />}
       </motion.section>
     </motion.div>
   )
@@ -577,8 +578,9 @@ function Card({
 
 /* ------------------------------------------------------------------- stack */
 
-export function Blades() {
-  const blades = useStore((s) => s.blades)
+export function Blades({ inlineMarkup = false }: { inlineMarkup?: boolean }) {
+  const allBlades = useStore((s) => s.blades)
+  const blades = useMemo(() => inlineMarkup ? allBlades.filter((blade) => blade.kind !== 'markup') : allBlades, [allBlades, inlineMarkup])
   const focusedBlade = useStore((s) => s.focusedBlade)
   const expandedBlade = useStore((s) => s.expandedBlade)
   const focusBlade = useStore((s) => s.focusBlade)
@@ -671,7 +673,7 @@ export function Blades() {
 
       {blades.length > 1 && !expandedBlade && (
         <div className="bl-hint">
-          <kbd>[</kbd> <kbd>]</kbd> cycle · <kbd>E</kbd> full · <kbd>X</kbd> close
+          <kbd>[</kbd> <kbd>]</kbd> alternar · <kbd>E</kbd> ampliar · <kbd>X</kbd> fechar
         </div>
       )}
     </div>

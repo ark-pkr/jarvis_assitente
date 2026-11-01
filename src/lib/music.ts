@@ -19,6 +19,8 @@
  * play, and the synthesised bed in sfx.ts covers the ambient case.
  */
 
+import { useWorkspace } from '../workspace'
+
 type Cue = 'boot-music' | 'ambient' | 'work'
 
 type Track = {
@@ -130,7 +132,7 @@ export function enable() {
  * headroom being made.
  */
 function level(cue: Cue): number {
-  return ducked && cue !== 'boot-music' ? want[cue] * DUCK : want[cue]
+  return (ducked && cue !== 'boot-music' ? want[cue] * DUCK : want[cue]) * useWorkspace.getState().settings.music
 }
 
 function fadeTo(cue: Cue, to: number, ms: number) {
@@ -246,3 +248,9 @@ export function duck(on: boolean) {
     if (tracks.has(c)) fadeTo(c, level(c), on ? 250 : 900)
   })
 }
+
+useWorkspace.subscribe((state, previous) => {
+  if (state.settings.music !== previous.settings.music) ALL.forEach((cue) => {
+    if (tracks.has(cue)) fadeTo(cue, level(cue), 120)
+  })
+})

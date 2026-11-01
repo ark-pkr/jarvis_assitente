@@ -1,8 +1,12 @@
 import { BRIDGE_HTTP_URL } from '../config'
-import { getMic } from './audio'
-import { speakingNow, speakingSince } from './tts'
+import { getMic, startAnalyser } from './audio'
+import { speakingNow } from './tts'
 import { startVad, type Vad } from './vad'
 import { caps } from './capabilities'
+import { useWorkspace } from '../workspace'
+import { isExplicitInterruption } from './voiceGuard'
+import { createSpeakerRecognizer, profileFromBase64, scoreSpeaker } from './speakerIdentity'
+import type { Eagle, EagleProfile } from '@picovoice/eagle-web'
 
 /**
  * The voice loop.
@@ -19,9 +23,8 @@ import { caps } from './capabilities'
  * restart leaves a quarter-second of deafness that eats whole wake words.
  *
  * Keeping the mic open costs one thing: JARVIS hears himself through the
- * speakers. That is handled here in text rather than in acoustics — see
- * `isEcho` — because the browser gives SpeechRecognition its own capture and
- * won't let us put a canceller in front of it.
+ * speakers. Residual echo is filtered at the transcript level in `isEcho`,
+ * regardless of which speech service produced the transcript.
  */
 
 export type VoiceMode =
@@ -47,11 +50,14 @@ export type VoiceHandlers = {
   onPartial: (text: string) => void
   /** A complete, endpointed utterance. */
   onUtterance: (text: string) => void
+  /** One unclear transcript segment that can be repeated before any command runs. */
+  onClarification: (text: string) => void
   /** The recogniser is unusable. Distinct from the user saying nothing. */
   onError: (message: string) => void
 }
 
 export type Voice = {
+  arm?: (windowMs?: number, bypassIdentity?: boolean) => void
   stop: () => void
   /** True while a recogniser is actually running. */
   live: () => boolean
@@ -78,7 +84,7 @@ const WAKE_DEBOUNCE = 1500
  * indication why. Better a rare false wake than a name that does not answer.
  */
 const WAKE =
-  /\b(?:hey|hi|ok|okay|yo)?\s*(?:jarvis|jarvys|jervis|jarvis's|travis|jarviss|java's|jarv)\b(?!'s)/i
+  /\b(?:oi|olá|ola|ei)?\s*(?:jarvis|jarvys|jervis|jarviss|jarv|járvis|jarves)\b/i
 
 /** Everything after the wake phrase, which is usually the actual command. */
 function afterWake(text: string): string {
@@ -123,7 +129,7 @@ function afterWake(text: string): string {
  * last word of a real request.
  */
 const CONTINUES =
-  /\b(and|or|but|so|because|since|if|when|while|that|which|who|whose|to|of|in|on|at|by|for|with|from|about|into|onto|over|under|between|through|the|a|an|my|your|his|her|its|our|their|is|are|was|were|be|been|do|does|did|have|has|had|can|could|would|should|will|shall|might|must|like|than|then|as|very|really|just|some|any|all|both|either|neither)$/i
+  /(?:^|\s)(e|ou|mas|porque|pois|se|quando|enquanto|que|quem|qual|para|de|da|do|das|dos|em|no|na|nos|nas|com|sem|sobre|entre|até|pelo|pela|pelos|pelas|o|a|os|as|um|uma|meu|minha|seu|sua|nosso|nossa|é|são|está|estão|foi|era|ser|estar|tem|tinha|pode|poderia|deve|vai|muito|mais|menos)$/iu
 
 /** Trailing punctuation a transcriber emits mid-thought. */
 const TRAILS = /[,;:–—-]$/
@@ -140,7 +146,6 @@ const TRAILS = /[,;:–—-]$/
  * Kept short deliberately. This is the one window where a genuine interruption
  * is also least likely: the user has not yet heard enough to want to stop him.
  */
-const SELF_GUARD_MS = 350
 
 /**
  * A quiet gap this long with a finished-looking sentence ends the turn.
@@ -267,7 +272,7 @@ const norm = (s: string) =>
  * would be the single most infuriating failure this file could have.
  */
 const OVERRIDE =
-  /\b(stop|wait|jarvis|cancel|enough|quiet|hold on|shut up|never ?mind|forget it|no)\b/i
+  /\b(jarvis|pare|parar|espere|cancele|cancelar|chega|silêncio|silencio|aguarde|esqueça|esqueca|não|nao)\b/i
 
 /**
  * Words too common to be evidence of anything.
@@ -279,12 +284,12 @@ const OVERRIDE =
  * Only distinctive words count as proof he is hearing himself.
  */
 const STOP = new Set(
-  ('a an the and or but so of to in on at by for with from is are was were be ' +
-    'it its this that these those i you he she we they me him her them my your ' +
-    'our their what which who how why when where do does did can could would ' +
-    'should will shall not no yes if then than as about into over under out up ' +
-    'down one two three first second third now here there just very really got ' +
-    'get have has had say said tell me okay ok well right').split(' '),
+  ('a o as os um uma uns umas e ou mas de da do das dos em no na nos nas ' +
+    'por para com sem sobre entre eu você voce ele ela nós nos vocês voces ' +
+    'eles elas me mim meu minha seu sua nosso nossa que qual quem como ' +
+    'porque quando onde é são está estão foi era ser estar tem tinha pode ' +
+    'poderia deve vai não nao sim se então mais menos muito agora aqui ' +
+    'ali isso isto esse essa aquele aquela só já ainda bem certo senhor').split(' '),
 )
 
 /**
@@ -295,8 +300,8 @@ const STOP = new Set(
  * but the *words* survive.
  */
 function isEcho(heard: string, spoken: string): boolean {
-  if (!spoken) return false
-  if (OVERRIDE.test(heard)) return false
+    if (!spoken) return false
+  if (isExplicitInterruption(heard)) return false
 
   const all = norm(heard).split(' ').filter(Boolean)
   if (!all.length) return true
@@ -332,7 +337,7 @@ function isEcho(heard: string, spoken: string): boolean {
  * apart in one glance.
  */
 export const diag = {
-  /** Which input engine is running: 'elevenlabs' (VAD+Scribe) or 'browser'. */
+  /** Which input engine is running: Gemini, ElevenLabs, or browser recognition. */
   engine: 'browser',
   /** Whether the microphone pipeline is live. */
   running: false,
@@ -357,8 +362,10 @@ export const diag = {
   waitedMs: 0,
   /** Barge-ins suppressed because he had only just started the sentence. */
   selfGuarded: 0,
-  /** Transcription failures (network, or the bridge speech proxy). */
+  /** Automatic restarts of the browser recognition service. */
   restarts: 0,
+  /** Failed speech-to-text requests, separate from recogniser restarts. */
+  transcriptionFailures: 0,
   /** Milliseconds the last transcription round-trip took. */
   idleMs: 0,
 }
@@ -376,12 +383,10 @@ if (typeof window !== 'undefined') {
 /**
  * Pick the voice engine and start it.
  *
- * Two engines, chosen by what the bridge reported at boot (see capabilities.ts):
- *   - ElevenLabs available -> local voice-activity detection for instant
- *     barge-in, and ElevenLabs Scribe for the words. The reliable path.
- *   - nothing configured -> the browser's own SpeechRecognition, so a student
- *     with no keys still has a working assistant. Less robust, but free and
- *     zero-setup, and guarded by a heartbeat so its silent death is recovered.
+ * The bridge selects Gemini transcription in the Windows app and ElevenLabs
+ * Scribe in the browser. Browser SpeechRecognition is only a keyless web
+ * fallback; Electron's Chromium implementation depends on an external service
+ * and is not a reliable recovery path for a failed Gemini request.
  *
  * The microphone is opened once here so a denied permission is reported loudly
  * rather than surfacing later as an unexplained deafness, whichever engine runs.
@@ -393,19 +398,54 @@ export async function startVoice(h: VoiceHandlers): Promise<Voice> {
     diag.lastError = 'mic'
     h.onError(
       err instanceof DOMException && err.name === 'NotAllowedError'
-        ? 'Microphone access denied — voice input is unavailable.'
-        : 'No microphone available.',
+        ? 'Acesso ao microfone negado. Permita o microfone no navegador ou digite seu pedido.'
+        : 'Nenhum microfone disponível. Conecte um microfone ou digite seu pedido.',
     )
     return { stop: () => {}, live: () => false }
   }
-  diag.engine = caps().stt ? 'elevenlabs' : 'browser'
-  return caps().stt ? startElevenVoice(h) : startBrowserVoice(h)
+  diag.engine = caps().stt
+    ? (window.jarvisDesktop ? 'gemini' : 'elevenlabs')
+    : (window.jarvisDesktop ? 'unavailable' : 'browser')
+  if (window.jarvisDesktop && !caps().stt) {
+    h.onError('O reconhecimento Gemini não está disponível. Verifique a chave em Histórico e ajustes → Aplicativo e a conexão com o serviço local.')
+    return { stop: () => {}, live: () => false }
+  }
+
+  let current: Voice | null = null
+  const delegate = (voice: Voice) => { current = voice }
+
+  const primary = caps().stt
+    ? await startBridgeVoice(h, window.jarvisDesktop ? undefined : delegate)
+    : startBrowserVoice(h)
+  current = primary
+
+  return {
+    arm: (windowMs, bypassIdentity) => current?.arm?.(windowMs, bypassIdentity),
+    stop: () => current?.stop(),
+    live: () => current?.live() ?? false,
+  }
 }
 
-/** VAD + ElevenLabs Scribe. */
-async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
+function isTransientSttFailure(err: unknown): boolean {
+  if (!err) return false
+  const text = String(err)
+  return /timed out|timeout|AbortError|Failed to fetch|fetch failed|NetworkError|ERR_NETWORK|ECONNRESET|502|503|504/i.test(text)
+    || (err instanceof DOMException && ['TimeoutError', 'AbortError'].includes(err.name))
+}
+
+/** Local VAD + bridge transcription (Gemini in Electron, ElevenLabs in web). */
+async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) => void): Promise<Voice> {
   let lastWake = 0
   let vad: Vad | null = null
+  let speakerRecognizer: Eagle | null = null
+  let speakerProfile: EagleProfile | null = null
+  let speakerSetup: Promise<void> | null = null
+  let manualUntil = 0
+  let identityWarningAt = 0
+  let stopped = false
+  const captureAbort = new AbortController()
+  let addressedUntil = 0
+  let generation = 0
 
   /**
    * Segments waiting for the transcriber, oldest first.
@@ -420,7 +460,7 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
    * Order is preserved because the drain is single-flight, which matters —
    * "London" arriving before "what's the weather in" is worse than either.
    */
-  const pendingAudio: Blob[] = []
+  const pendingAudio: { blob: Blob; generation: number; at: number }[] = []
   let draining = false
 
   /**
@@ -445,29 +485,102 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
    * transcript arriving — and the transcript belongs to the mode the user is in
    * now, not the one they interrupted.
    */
-  const transcribe = async (blob: Blob) => {
+  const transcribe = async ({ blob, generation: captured, at }: { blob: Blob; generation: number; at: number }) => {
+    if (captured !== generation || Date.now() - at > 120000) return
+    if (stopped || h.mode() === 'deaf') return
     const mode = h.mode()
-    if (mode === 'deaf') return
-    const t0 = performance.now()
-    try {
-      const res = await fetch(`${BRIDGE_HTTP_URL}/stt`, {
-        method: 'POST',
-        headers: { 'content-type': blob.type || 'audio/webm' },
-        body: blob,
-      })
-      diag.idleMs = Math.round(performance.now() - t0)
-      if (!res.ok) {
-        diag.restarts++
-        diag.lastError = `stt ${res.status}`
-        drop(`transcription failed (${res.status})`)
+    const settings = useWorkspace.getState().settings
+    if (window.jarvisDesktop && settings.voiceIdentityRequired && Date.now() > manualUntil) {
+      try {
+        if (!speakerRecognizer || !speakerProfile) {
+          if (!speakerSetup) speakerSetup = (async () => {
+            const identity = await window.jarvisDesktop!.voiceIdentityMaterial()
+            if (!identity) throw new Error('Cadastre seu perfil em Histórico e ajustes → Áudio antes de usar comandos por voz.')
+            const recognizer = await createSpeakerRecognizer(identity.accessKey)
+            if (stopped) { await recognizer.release(); return }
+            try {
+              speakerProfile = profileFromBase64(identity.profile)
+              speakerRecognizer = recognizer
+            } catch (error) {
+              await recognizer.release()
+              throw error
+            }
+          })()
+          try { await speakerSetup } finally { speakerSetup = null }
+        }
+        if (stopped || captured !== generation) return
+        if (!speakerRecognizer || !speakerProfile) throw new Error('O perfil de voz não foi carregado.')
+        const match = await scoreSpeaker(blob, speakerRecognizer, speakerProfile, settings.speakerThreshold)
+        if (!match.accepted) {
+          drop(match.score === null ? 'voz insuficiente para identificação local' : `perfil de voz não reconhecido (${match.score.toFixed(2)})`)
+          if (mode !== 'guard') h.onPartial(match.score === null ? 'Não consegui confirmar a voz. Fale mais perto do microfone ou pressione Espaço.' : 'Voz não reconhecida. Pressione Espaço para ativar manualmente.')
+          return
+        }
+      } catch (error) {
+        drop('verificação local de voz indisponível')
+        if (Date.now() - identityWarningAt > 10_000) {
+          identityWarningAt = Date.now()
+          h.onError(error instanceof Error ? error.message : 'A verificação local de voz falhou. Nenhum áudio foi enviado.')
+        }
         return
       }
-      const { text } = (await res.json()) as { text?: string }
+    } else if (Date.now() <= manualUntil) {
+      manualUntil = 0
+    }
+    const t0 = performance.now()
+    try {
+      let res: Response | null = null
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await fetch(`${BRIDGE_HTTP_URL}/stt`, {
+            method: 'POST',
+            headers: { 'content-type': blob.type || 'audio/webm' },
+            body: blob,
+            signal: AbortSignal.any([captureAbort.signal, AbortSignal.timeout(50000)]),
+          })
+        } catch (err) {
+          if (attempt > 0 || stopped || captureAbort.signal.aborted || !isTransientSttFailure(err)) throw err
+          await new Promise((resolve) => setTimeout(resolve, 800))
+          continue
+        }
+        if (attempt === 0 && [502, 503, 504].includes(res.status)) {
+          await res.arrayBuffer()
+          await new Promise((resolve) => setTimeout(resolve, 800))
+          continue
+        }
+        break
+      }
+      if (!res) throw new Error('A transcrição não retornou uma resposta.')
+      diag.idleMs = Math.round(performance.now() - t0)
+      if (!res.ok) {
+        diag.transcriptionFailures++
+        diag.lastError = `stt ${res.status}`
+        drop(`transcription failed (${res.status})`)
+        const message = res.status === 429
+          ? 'Limite de transcrição atingido. Verifique a cota Gemini.'
+          : [401, 403].includes(res.status)
+            ? 'A chave Gemini foi recusada. Verifique a configuração em Histórico e ajustes → Aplicativo.'
+            : res.status === 504
+              ? 'A transcrição Gemini demorou demais. Verifique a conexão e tente novamente.'
+              : 'O serviço de transcrição está indisponível. Verifique a conexão e a configuração Gemini.'
+        h.onError(message)
+        return
+      }
+      const { text, clarification } = (await res.json()) as { text?: string; clarification?: string }
+      if (stopped || captured !== generation) return
+      if (mode === 'deaf') return
       const said = (text ?? '').trim()
       diag.lastError = ''
 
       if (!said) {
         drop('nothing intelligible in the segment')
+        if (mode !== 'guard' && clarification) h.onClarification(clarification)
+        else if (mode !== 'guard') h.onPartial('Não entendi com clareza. Diga “Jarvis” e repita o pedido completo.')
+        return
+      }
+      if (mode === 'guard') {
+        if (isExplicitInterruption(said)) { assemble.cancel(); h.onSpeechStart() }
+        else drop('resposta em andamento; aguardando comando explícito para interromper')
         return
       }
 
@@ -480,6 +593,25 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
 
       diag.heard = said
       diag.heardAt = Date.now()
+      if (window.jarvisDesktop) {
+        if (WAKE.test(said)) {
+          if (Date.now() - lastWake <= WAKE_DEBOUNCE) {
+            drop('wake word repeated too quickly')
+            return
+          }
+          lastWake = Date.now()
+          diag.wakes++
+          diag.accepted++
+          diag.dropped = ''
+          const command = afterWake(said)
+          if (!command) { addressedUntil = Date.now() + 30000; h.onWake(''); return }
+          addressedUntil = 0; h.onWake(command); return
+        }
+        if (mode !== 'command' || Date.now() > addressedUntil) {
+          drop('fala não dirigida ao Jarvis'); h.onPartial('Diga “Jarvis” antes do seu pedido.'); return
+        }
+        addressedUntil = 0
+      }
 
       if (mode === 'wake') {
         if (WAKE.test(said) && Date.now() - lastWake > WAKE_DEBOUNCE) {
@@ -498,9 +630,28 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
       // is finished, reading the words and whether the room is still noisy.
       assemble.feed(said, vad?.meter().speaking ?? false)
     } catch (err) {
-      diag.restarts++
-      diag.lastError = String(err)
+      if (stopped) return
+      if (isTransientSttFailure(err) && onFallback && !useWorkspace.getState().settings.voiceIdentityRequired) {
+        stopped = true
+        captureAbort.abort()
+        pendingAudio.length = 0
+        clearInterval(guardPoll)
+        assemble.cancel()
+        vad?.stop()
+        diag.running = false
+        diag.engine = 'browser'
+        diag.lastError = 'stt timeout; falling back to browser speech recognition'
+        h.onError('Servidor de voz não respondeu. Reativando reconhecimento do navegador.')
+        const next = startBrowserVoice(h)
+        onFallback(next)
+        return
+      }
+      diag.transcriptionFailures++
+      diag.lastError = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
       drop('could not reach the speech service')
+      h.onError(window.jarvisDesktop
+        ? 'Não foi possível transcrever agora. O JARVIS continuará ouvindo; verifique a conexão e a cota Gemini.'
+        : 'Não foi possível transcrever agora. Verifique a conexão e tente novamente.')
     }
   }
 
@@ -509,7 +660,7 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
     if (draining) return
     draining = true
     try {
-      while (pendingAudio.length) {
+      while (!stopped && pendingAudio.length) {
         await transcribe(pendingAudio.shift()!)
       }
     } finally {
@@ -529,17 +680,14 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
       // The barge-in. In guard mode the user has started talking over him, and
       // because the guard threshold is high this is a real interruption rather
       // than leaked playback — so cut him off now, do not wait for the words.
-      if (mode === 'guard') {
-        const since = speakingSince()
-        if (since && Date.now() - since < SELF_GUARD_MS) {
-          diag.selfGuarded++
-          return
-        }
-        h.onSpeechStart()
-      }
+      // Energy alone can be JARVIS's own playback. Wait for an explicit
+      // named interruption in the transcription before cancelling a reply.
     },
     onEnd: (blob) => {
-      pendingAudio.push(blob)
+      if (stopped) return
+      if (['guard', 'deaf'].includes(h.mode())) return
+      if (pendingAudio.length >= 2) { pendingAudio.length = 0; generation++; return }
+      pendingAudio.push({ blob, generation, at: Date.now() })
       void drain()
     },
     onLevel: (v) => {
@@ -564,9 +712,12 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
   // Raise the trigger bar exactly while he speaks. The mode is polled rather
   // than pushed because nothing in the app pushes phase changes here, and a
   // 200ms lag on the echo gate is imperceptible.
+  let previousMode = h.mode()
   const guardPoll = setInterval(() => {
     const mode = h.mode()
-    vad?.setGuard(mode === 'guard')
+    vad?.setGuard(mode === 'guard' || mode === 'deaf')
+    if (mode !== previousMode && (mode === 'guard' || mode === 'deaf')) { generation++; addressedUntil = 0; pendingAudio.length = 0; assemble.cancel() }
+    previousMode = mode
     // He has stood down — by Escape, by the idle timeout, or by dropping back
     // to the wake word. Anything half-said belonged to a conversation that is
     // over, and letting the hold expire later would open the next one with a
@@ -575,10 +726,20 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
   }, 200)
 
   return {
+    arm: (windowMs = 30000, bypassIdentity = false) => {
+      addressedUntil = Date.now() + Math.max(5000, Math.min(30000, windowMs))
+      if (bypassIdentity) manualUntil = addressedUntil
+    },
     stop: () => {
+      stopped = true
+      captureAbort.abort()
+      pendingAudio.length = 0
       clearInterval(guardPoll)
       assemble.cancel()
       vad?.stop()
+      void speakerRecognizer?.release()
+      speakerRecognizer = null
+      speakerProfile = null
       diag.running = false
     },
     live: () => vad?.live() ?? false,
@@ -590,20 +751,15 @@ async function startElevenVoice(h: VoiceHandlers): Promise<Voice> {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The keyless path. Uses the browser's own SpeechRecognition for both detection
- * and transcription, so a student who has configured nothing still gets voice.
- *
- * It is the flakier engine — Chrome throttles it and it can go silent with no
- * event to catch — so a heartbeat watches it and forces a fresh session
- * whenever it stops showing signs of life. That single guard is the difference
- * between "the wake word stopped working halfway through the lesson" and an
- * assistant that keeps listening.
+ * The keyless web path. Uses the browser's own SpeechRecognition for both
+ * detection and transcription. Restarts only after an API end/start failure;
+ * silence is not treated as a dead recogniser.
  */
 function startBrowserVoice(h: VoiceHandlers): Voice {
   const Ctor =
     (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
   if (!Ctor) {
-    h.onError('This browser has no speech recognition — use Chrome or Edge, or add an ElevenLabs key.')
+    h.onError('Este navegador não oferece reconhecimento de voz. Abra no Chrome ou Edge, ou digite seu pedido abaixo.')
     return { stop: () => {}, live: () => false }
   }
 
@@ -613,9 +769,11 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
   let settled = ''
   let interim = ''
   let started = false
-  let barged = false
   let lastWake = 0
   let lastAlive = Date.now()
+  let restartDelay = 250
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
+  let reportedError = ''
   let silenceTimer: ReturnType<typeof setTimeout> | null = null
 
   /** Same assembly rules as the premium path — a pause is not a full stop. */
@@ -633,6 +791,17 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
     lastAlive = Date.now()
   }
 
+  const scheduleRestart = () => {
+    if (stopped || restartTimer) return
+    const delay = restartDelay
+    restartDelay = Math.min(15000, restartDelay * 2)
+    diag.restarts++
+    restartTimer = setTimeout(() => {
+      restartTimer = null
+      spin()
+    }, delay)
+  }
+
   const clearSilence = () => {
     if (silenceTimer) clearTimeout(silenceTimer)
     silenceTimer = null
@@ -643,7 +812,6 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
     settled = ''
     interim = ''
     started = false
-    barged = false
   }
 
   const emit = () => {
@@ -680,11 +848,13 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
     clearSilence()
     // Endpoint on a short quiet gap; the ElevenLabs path tunes this more
     // finely, but a fixed window is plenty for the fallback.
-    silenceTimer = setTimeout(emit, 900)
+    silenceTimer = setTimeout(emit, Math.max(700, Math.min(2500, useWorkspace.getState().settings.speechPause * 1000)))
   }
 
   const onResult = (e: any) => {
     touch()
+    restartDelay = 250
+    reportedError = ''
     const mode = h.mode()
     diag.mode = mode
     if (mode === 'deaf') {
@@ -695,18 +865,25 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
     interim = ''
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const chunk = e.results[i][0].transcript as string
-      if (e.results[i].isFinal) fresh += chunk
-      else interim += chunk
+      if (e.results[i].isFinal) fresh = `${fresh} ${chunk}`.trim()
+      else interim = `${interim} ${chunk}`.trim()
     }
-    const heard = `${settled}${fresh} ${interim}`.replace(/\s+/g, ' ').trim()
+    const heard = `${settled} ${fresh} ${interim}`.replace(/\s+/g, ' ').trim()
     if (!heard) return
+    if (mode === 'guard') {
+      reset()
+      assemble.cancel()
+      if (isExplicitInterruption(heard)) h.onSpeechStart()
+      else drop('resposta em andamento; ruído ou fala não interrompe automaticamente')
+      return
+    }
     if (isEcho(`${fresh} ${interim}`, speakingNow())) {
       interim = ''
       return
     }
 
     if (mode === 'wake') {
-      settled += fresh
+      settled = `${settled} ${fresh}`.trim()
       if (WAKE.test(heard) && Date.now() - lastWake > WAKE_DEBOUNCE) {
         lastWake = Date.now()
         diag.wakes++
@@ -719,32 +896,10 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
       return
     }
 
-    settled += fresh
+    settled = `${settled} ${fresh}`.trim()
     const full = `${settled} ${interim}`.replace(/\s+/g, ' ').trim()
-    if (!started || (mode === 'guard' && !barged)) {
-      const words = full.split(/\s+/).filter(Boolean).length
-      if (mode === 'guard') {
-        // An override word cuts through everything below it — "stop" has to
-        // work on the first syllable or it is not a stop button.
-        if (!OVERRIDE.test(full)) {
-          // His own first syllable, same as the premium path. This engine has
-          // no energy gate, so without the clock the only defence is the word
-          // count below, and a single clear word is exactly what leaks first.
-          const since = speakingSince()
-          if (since && Date.now() - since < SELF_GUARD_MS) {
-            diag.selfGuarded++
-            return
-          }
-          // Two words before this engine believes an interruption. The energy
-          // path can be instant because it triggers on loudness the canceller
-          // has already had a pass at; here the evidence is a transcript of
-          // audio that includes his own playback, and one word of that is not
-          // evidence of anything.
-          if (words < 2) return
-        }
-      }
+    if (!started) {
       started = true
-      if (mode === 'guard') barged = true
       h.onSpeechStart()
     }
     diag.dropped = ''
@@ -756,67 +911,81 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
   }
 
   const spin = () => {
-    if (stopped || running) return
-    rec = new Ctor()
-    rec.continuous = true
-    rec.interimResults = true
-    rec.lang = 'en-GB'
-    rec.onstart = () => {
+    if (stopped || running || rec) return
+    let instance: any
+    try {
+      instance = new Ctor()
+    } catch (error) {
+      diag.lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      scheduleRestart()
+      return
+    }
+    rec = instance
+    instance.continuous = true
+    instance.interimResults = true
+    instance.lang = 'pt-BR'
+    instance.maxAlternatives = 3
+    instance.onstart = () => {
       running = true
       diag.running = true
       diag.sessions++
       touch()
     }
-    rec.onresult = onResult
-    rec.onerror = (ev: any) => {
+    instance.onresult = onResult
+    instance.onerror = (ev: any) => {
       diag.lastError = String(ev.error ?? '')
       if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
         stopped = true
         diag.running = false
-        h.onError('Microphone access was refused — voice input is unavailable.')
+        if (restartTimer) clearTimeout(restartTimer)
+        restartTimer = null
+        h.onError('Microfone bloqueado. Permita o microfone no ícone ao lado do endereço e recarregue a página. Você também pode digitar seu pedido.')
+      } else if (ev.error === 'network') {
+        if (reportedError !== ev.error) h.onError('Não foi possível conectar ao reconhecimento de voz. Verifique a conexão ou digite seu pedido abaixo.')
+      } else if (ev.error === 'audio-capture') {
+        if (reportedError !== ev.error) h.onError('Microfone não encontrado. Conecte um microfone e verifique o dispositivo de entrada do navegador.')
       }
+      reportedError = String(ev.error ?? '')
     }
-    rec.onend = () => {
+    instance.onend = () => {
+      if (rec !== instance) return
       running = false
       diag.running = false
       touch()
       rec = null
-      if (!stopped) setTimeout(spin, 80)
+      if (!stopped) scheduleRestart()
     }
     try {
-      rec.start()
-    } catch {
+      instance.start()
+    } catch (error) {
+      if (rec === instance) rec = null
       running = false
-      setTimeout(spin, 250)
+      diag.running = false
+      diag.lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      scheduleRestart()
     }
   }
 
   spin()
 
-  // The heartbeat. If nothing has been heard from the engine for a while it has
-  // gone quiet on us — tear it down and build a fresh one.
-  const health = setInterval(() => {
+  const deviceChanged = () => {
     if (stopped) return
-    const idle = Date.now() - lastAlive
-    diag.idleMs = idle
-    if (idle < 15000) return
-    diag.restarts++
-    try {
-      rec?.abort()
-    } catch {
-      /* already gone */
-    }
-    rec = null
-    running = false
-    diag.running = false
-    touch()
-    spin()
-  }, 5000)
+    void getMic().then(() => startAnalyser()).catch(() => h.onError('Não foi possível reabrir o microfone. Verifique o dispositivo de entrada.'))
+    try { rec?.abort() } catch { /* onend restarts the recognizer */ }
+  }
+  navigator.mediaDevices?.addEventListener('devicechange', deviceChanged)
+
+  // Silence is normal during wake-word listening; only recover when the API
+  // actually ends or fails to start, not because no transcript arrived.
+  const health = setInterval(() => { diag.idleMs = Date.now() - lastAlive }, 1000)
 
   return {
     stop: () => {
       stopped = true
       clearInterval(health)
+      if (restartTimer) clearTimeout(restartTimer)
+      restartTimer = null
+      navigator.mediaDevices?.removeEventListener('devicechange', deviceChanged)
       clearSilence()
       assemble.cancel()
       diag.running = false

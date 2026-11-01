@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion, type Variants } from 'framer-motion'
 import { useStore, type Panel } from '../store'
-import { sanitisePanelHtml } from './sanitise'
+import { openResearchLink, sanitisePanelHtml } from './sanitise'
 
 /**
  * Heads-up display panels.
@@ -168,6 +168,7 @@ const Card = memo(function Card({ panel }: { panel: Panel }) {
         <div
           ref={body}
           className={panel.anim === 'stagger' ? 'p-body p-stagger' : 'p-body'}
+          onClick={openResearchLink}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       )}

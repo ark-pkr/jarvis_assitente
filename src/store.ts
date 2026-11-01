@@ -352,7 +352,7 @@ export const useStore = create<State>((set) => ({
   setActiveTool: (activeTool) => set({ activeTool }),
   setError: (error) => set({ error }),
   setConnected: (connected) => set({ connected }),
-  pushTurn: (turn) => set((s) => ({ turns: [...s.turns.slice(-40), turn] })),
+  pushTurn: (turn) => set((s) => ({ turns: [...s.turns, turn] })),
   appendToLastTurn: (text) =>
     set((s) => {
       const turns = [...s.turns]
@@ -417,14 +417,14 @@ export const useStore = create<State>((set) => ({
 
 /** Colour identity per phase — shared by the 3D scene and the 2D HUD. */
 export const phaseColor: Record<Phase, string> = {
-  offline: '#0d4a4a',
-  boot: '#17b3b3',
-  dormant: '#12908f',
-  waking: '#5cf2ef',
-  listening: '#19d8d2',
-  thinking: '#f0a93c',
-  tooling: '#a97bff',
-  speaking: '#3ef2a8',
+  offline: '#64300f',
+  boot: '#e87922',
+  dormant: '#b95a18',
+  waking: '#ffd27a',
+  listening: '#ffb347',
+  thinking: '#ff8b2c',
+  tooling: '#e79b43',
+  speaking: '#ffd06a',
 }
 
 /**

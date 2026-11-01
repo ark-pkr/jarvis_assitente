@@ -1,4 +1,5 @@
 import { BACKEND } from '../config'
+import { conversationContext } from '../workspace'
 import * as direct from './anthropic'
 import * as bridge from './bridge'
 import type { AskHandlers, Msg } from './anthropic'
@@ -28,10 +29,14 @@ export async function ask(
   prompt: string,
   history: Msg[],
   handlers: AskHandlers,
+  request: { fast: boolean; article: boolean },
 ): Promise<{ text: string; tools: string[] }> {
+  const context = conversationContext()
   return usingBridge
-    ? bridge.ask(prompt, handlers)
-    : direct.ask([...history, { role: 'user', content: prompt }], handlers)
+    ? bridge.ask(prompt, handlers, { ...request, privacyMode: context.privacyMode })
+    : direct.ask(context.privacyMode ? [{ role: 'user', content: prompt }] : [...history, { role: 'user', content: prompt }], handlers, {
+      ...request, privacyMode: context.privacyMode, memory: context.memory,
+    })
 }
 
 export async function warm(): Promise<void> {

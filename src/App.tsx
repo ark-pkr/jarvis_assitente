@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
+import { MissionControl } from './ui/MissionControl'
+import { WorkspacePanel } from './ui/WorkspacePanel'
+import { useWorkspace, flushWorkspace } from './workspace'
 import { Boot } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
@@ -15,6 +18,8 @@ import * as camera from './lib/camera'
 import * as kokoro from './lib/kokoro'
 import { TTS_ENGINE } from './config'
 import { forTool, attention } from './lib/fillers'
+import { chooseResponsePace, isArticleRequest } from './lib/responsePace'
+import { mergeClarification, splitUnclearTranscript } from './lib/clarification'
 import {
   ask,
   warm,
@@ -29,7 +34,7 @@ import {
   usingBridge,
   type Msg,
 } from './lib/brain'
-import { startAnalyser, micLevel } from './lib/audio'
+import { startAnalyser, stopMicrophone, micLevel } from './lib/audio'
 import { probeCapabilities } from './lib/capabilities'
 import { env } from './config'
 
@@ -46,14 +51,11 @@ import { env } from './config'
  * all stops him talking, and whatever you say next becomes the new turn.
  */
 
-/** How long to wait for someone to start speaking after he wakes. Generous:
- *  people say his name and *then* think about what they wanted. */
-const AWAIT_SPEECH_MS = 14000
+/** Zero keeps voice input active until the user explicitly pauses it. */
+const AWAIT_SPEECH_MS = 0
 
-/** After an answer, how long the mic stays open for a follow-up before he
- *  drops back to standby. Long enough that you don't have to say the name
- *  again to continue a thought. */
-const FOLLOW_UP_MS = 11000
+/** Continue listening after every answer without an inactivity timeout. */
+const FOLLOW_UP_MS = 0
 
 /** crypto.randomUUID needs a secure context, which a LAN address over plain
  *  http is not. Not worth failing a whole turn over an id. */
@@ -63,18 +65,24 @@ const newId = () =>
 
 /** The same mishearings voice.ts accepts for the wake word — otherwise a turn
  *  that woke him as "travis" gets that word sent on to the model as a question. */
-const NAME = '(?:jarvis|jarvys|jervis|travis|jarviss|java\'s|jarv)'
+const NAME = '(?:jarvis|jarvys|jervis|jarviss|jarv|járvis|jarves)'
 /** A bare vocative — "Jarvis", "hey jarvis" — with nothing asked. */
-const BARE_NAME = new RegExp(`^(?:hey|hi|ok|okay|yo)?\\s*${NAME}[\\s,.!?]*$`, 'i')
+const BARE_NAME = new RegExp(`^(?:oi|olá|ola|ei)?\\s*${NAME}[\\s,.!?]*$`, 'i')
 /** A leading vocative on a real command: "Jarvis, what's the weather". */
-const LEADING_NAME = new RegExp(`^(?:hey|hi|ok|okay|yo)?\\s*${NAME}\\b[\\s,.:!?-]*`, 'i')
+const LEADING_NAME = new RegExp(`^(?:oi|olá|ola|ei)?\\s*${NAME}\\b[\\s,.:!?-]*`, 'i')
 
 export default function App() {
   const store = useStore
   const phase = useStore((s) => s.phase)
+  const privacyMode = useWorkspace((s) => s.settings.privacyMode)
   const history = useRef<Msg[]>([])
   const speaker = useRef<ReturnType<typeof createSpeaker> | null>(null)
   const voice = useRef<Voice | null>(null)
+  const privacyActions = useRef<{
+    goDormant: () => void
+    startVoiceLoop: () => Promise<void>
+    onVoiceError: (message: string) => void
+  }>({ goDormant: () => {}, startVoiceLoop: async () => {}, onVoiceError: () => {} })
 
   /**
    * Monotonic turn counter. Every await in a turn checks it on the way out:
@@ -85,6 +93,25 @@ export default function App() {
   const booting = useRef(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const voicePoll = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pendingClarification = useRef<{ before: string; after: string } | null>(null)
+  const clarificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const restore = () => {
+      const workspace = useWorkspace.getState()
+      store.setState({ turns: workspace.sessions.find((s) => s.id === workspace.active)?.turns ?? [], panels: [], blades: [] })
+    }
+    restore()
+    const save = store.subscribe((state, previous) => {
+      if (state.turns !== previous.turns && !useWorkspace.getState().settings.privacyMode) {
+        useWorkspace.getState().saveTurns(state.turns)
+      }
+    })
+    const switched = useWorkspace.subscribe((state, previous) => {
+      if (state.active !== previous.active) restore()
+    })
+    return () => { save(); switched(); flushWorkspace() }
+  }, [store])
 
   // -- helpers --------------------------------------------------------------
 
@@ -93,13 +120,21 @@ export default function App() {
     idleTimer.current = null
   }
 
+  const clearClarification = () => {
+    if (clarificationTimer.current) clearTimeout(clarificationTimer.current)
+    clarificationTimer.current = null
+    pendingClarification.current = null
+  }
+
   const silence = () => {
     speaker.current?.cancel()
     speaker.current = null
   }
 
   const goDormant = () => {
+    if (['thinking', 'tooling', 'speaking'].includes(store.getState().phase)) interrupt()
     clearIdle()
+    clearClarification()
     silence()
     turn.current++
     const s = store.getState()
@@ -118,12 +153,13 @@ export default function App() {
     s.setCaption('')
     s.setPhase('listening')
     sfx.play('listen')
-    idleTimer.current = setTimeout(goDormant, window)
+    if (window > 0) idleTimer.current = setTimeout(goDormant, window)
   }
 
   // -- one turn -------------------------------------------------------------
 
-  const respond = async (said: string): Promise<void> => {
+  const respond = async (said: string, voiceInput = false): Promise<void> => {
+    clearClarification()
     const mine = ++turn.current
     const stale = () => mine !== turn.current
 
@@ -145,14 +181,25 @@ export default function App() {
     const turnId = newId()
     let started = false
     let filled = false
+    const pace = chooseResponsePace(said, useWorkspace.getState().settings.fast)
+    let acknowledgement: ReturnType<typeof setTimeout> | null = null
 
     try {
+      if (voiceInput) acknowledgement = setTimeout(() => {
+        if (stale() || started || filled) return
+        filled = true
+        store.getState().setCaption('Entendi, vou verificar.')
+        spk.sayFast('Entendi, vou verificar.')
+      }, 650)
       const { text } = await ask(said, history.current, {
         onText: (delta) => {
           if (stale()) return
           if (!started) {
+            if (acknowledgement) clearTimeout(acknowledgement)
+            acknowledgement = null
             started = true
             store.getState().setPhase('speaking')
+            store.getState().setCaption('')
             // The answer arriving is what ends the tool phase — a timer would
             // clear the readout while a slow tool was still running.
             store.getState().setActiveTool(null)
@@ -177,16 +224,18 @@ export default function App() {
           // chain of five tools shouldn't produce five apologies.
           if (!filled && !started) {
             filled = true
-            spk.say(forTool(name))
+            if (acknowledgement) clearTimeout(acknowledgement)
+            acknowledgement = null
+            spk.sayFast(forTool(name))
           }
         },
-      })
+      }, { fast: pace.fast, article: isArticleRequest(said) })
 
       if (stale()) return
 
       // The bridge keeps conversation state in its own session, so history is
       // only threaded through on the direct path.
-      if (!usingBridge) {
+      if (!usingBridge && !useWorkspace.getState().settings.privacyMode) {
         history.current.push({ role: 'user', content: said })
         history.current.push({ role: 'assistant', content: text || '…' })
         if (history.current.length > 16) {
@@ -203,8 +252,9 @@ export default function App() {
       sfx.play('error')
       store
         .getState()
-        .setError(err instanceof Error ? err.message : 'Something went wrong.')
+        .setError(err instanceof Error ? err.message : 'Não foi possível concluir o pedido.')
     } finally {
+      if (acknowledgement) clearTimeout(acknowledgement)
       if (!stale()) {
         speaker.current = null
         sfx.duck(false)
@@ -214,6 +264,7 @@ export default function App() {
         // Stay open. Having to say his name again to add one more sentence is
         // the difference between a conversation and a vending machine.
         listen(FOLLOW_UP_MS)
+        voice.current?.arm?.(15000)
       }
     }
   }
@@ -236,6 +287,14 @@ export default function App() {
     }
   }
 
+  const acceptVoice = (text: string) => {
+    const pending = pendingClarification.current
+    if (pending) {
+      clearClarification()
+      text = mergeClarification(pending, text)
+    }
+    void respond(text, true)
+  }
   const onWake = (trailing: string) => {
     const phase = store.getState().phase
     if (phase === 'offline' || phase === 'boot') return
@@ -246,10 +305,11 @@ export default function App() {
     // "Jarvis, what's happening in AI this week" in one breath. Waiting for a
     // greeting he didn't need is the most common way an assistant wastes time.
     if (trailing) {
-      void respond(trailing)
+      acceptVoice(trailing)
       return
     }
 
+    if (window.jarvisDesktop) { listen(AWAIT_SPEECH_MS); return }
     store.getState().setPhase('waking')
 
     // Answer to his name. Deliberately NOT awaited any more: the microphone is
@@ -305,7 +365,28 @@ export default function App() {
       return
     }
 
-    void respond(said)
+    acceptVoice(said)
+  }
+
+  const onClarification = (text: string) => {
+    const parts = splitUnclearTranscript(text.replace(LEADING_NAME, '').trim())
+    if (!parts) {
+      store.getState().setCaption('Não entendi com clareza. Diga “Jarvis” e repita o pedido completo.')
+      return
+    }
+    clearClarification()
+    pendingClarification.current = parts
+    listen(AWAIT_SPEECH_MS)
+    store.getState().setCaption(`${text} — repita somente o trecho marcado.`)
+    const prompt = createSpeaker()
+    speaker.current = prompt
+    prompt.sayFast('Não entendi uma parte do seu pedido. Repita só esse trecho, por favor.')
+    void prompt.end()
+    voice.current?.arm?.(25000)
+    clarificationTimer.current = setTimeout(() => {
+      clearClarification()
+      store.getState().setCaption('')
+    }, 25000)
   }
 
   const onPartial = (text: string) => {
@@ -314,6 +395,40 @@ export default function App() {
 
   const onVoiceError = (message: string) => {
     store.getState().setError(message)
+  }
+
+  const startVoiceLoop = async () => {
+    if (useWorkspace.getState().settings.privacyMode) return
+    if (voice.current?.live()) return
+    await probeCapabilities()
+    voice.current = await startVoice({ mode, onWake, onSpeechStart, onPartial, onUtterance, onClarification, onError: onVoiceError })
+    listen(AWAIT_SPEECH_MS)
+  }
+
+  privacyActions.current = { goDormant, startVoiceLoop, onVoiceError }
+  useEffect(() => {
+    const actions = privacyActions.current
+    if (privacyMode) {
+      if (!['offline', 'boot'].includes(useStore.getState().phase)) actions.goDormant()
+      voice.current?.stop()
+      voice.current = null
+      void stopMicrophone().catch((error: Error) => actions.onVoiceError(`Não foi possível desligar o microfone: ${error.message}`))
+      return
+    }
+    if (!['offline', 'boot'].includes(useStore.getState().phase) && !voice.current?.live()) {
+      void actions.startVoiceLoop().catch((error: Error) => actions.onVoiceError(error.message))
+    }
+  }, [privacyMode])
+
+  const pauseVoiceForEnrollment = () => {
+    goDormant()
+    voice.current?.stop()
+    voice.current = null
+  }
+
+  const resumeVoiceAfterEnrollment = () => {
+    if (store.getState().phase === 'offline' || store.getState().phase === 'boot') return
+    void startVoiceLoop().catch((error) => onVoiceError(error instanceof Error ? error.message : 'Não foi possível reativar a escuta.'))
   }
 
   // -- power on -------------------------------------------------------------
@@ -340,8 +455,8 @@ export default function App() {
         .getState()
         .setError(
           err instanceof Error
-            ? `Power-up failed: ${err.message}`
-            : 'Power-up failed. Click to try again.',
+            ? `Falha ao iniciar: ${err.message}`
+            : 'Não foi possível iniciar. Clique para tentar novamente.',
         )
     }
   }
@@ -426,7 +541,7 @@ export default function App() {
     // something into orbit while he is still speaking the sentence about it.
     watchUi((op, args) => {
       const s = store.getState()
-      const a = (args ?? {}) as Record<string, never>
+      const a = (args ?? {}) as Record<string, any>
       switch (op) {
         case 'patch':
           s.applyUi(args)
@@ -439,6 +554,22 @@ export default function App() {
         case 'effect':
           s.fireEffect(a.kind)
           break
+        case 'helios': {
+          const current = useWorkspace.getState().settings.helios
+          const patch: Partial<typeof current> = {}
+          const action = a.action
+          if (action === 'pause' && (typeof a.value === 'boolean' || a.value === undefined)) patch.paused = a.value !== false
+          else if (action === 'color' && typeof a.value === 'string') {
+            const colors = { gold: 'gold', amber: 'gold', cyan: 'cyan', blue: 'cyan', violet: 'violet', purple: 'violet', emerald: 'emerald', green: 'emerald', rose: 'rose', pink: 'rose' } as const
+            const color = colors[a.value.toLowerCase() as keyof typeof colors]
+            if (color) patch.color = color
+          } else if (action === 'cinema' && (typeof a.value === 'boolean' || a.value === undefined)) patch.cinema = a.value !== false
+          else if (action === 'quality' && ['auto', 'eco', 'balanced', 'ultra'].includes(String(a.value))) patch.quality = a.value as typeof current.quality
+          else if (action === 'intro') { patch.introSequence = current.introSequence + 1; patch.paused = false }
+          else if (action === 'reset') Object.assign(patch, { paused: false, speed: 1, glow: 1, separation: 0, color: 'gold', quality: 'auto', bloom: true, autoRotate: true, cinema: false })
+          if (Object.keys(patch).length) useWorkspace.getState().setSettings({ visualTheme: 'helios', helios: patch })
+          break
+        }
         case 'reset':
           s.resetUi()
           break
@@ -454,11 +585,11 @@ export default function App() {
     // on screen still shows it. Better to say so than to let him quietly forget.
     watchConnection((state) => {
       if (state === 'lost') {
-        store.getState().setError('Bridge connection lost — reconnecting.')
+        store.getState().setError('Conexão com o servidor perdida. Reconectando…')
       } else if (state === 'reconnected') {
         store
           .getState()
-          .setError('Bridge reconnected. The previous conversation was not kept.')
+          .setError('Servidor reconectado. A conversa selecionada será retomada no próximo pedido.')
       }
     })
     const warming = warm().catch((err: Error) => s.setError(err.message))
@@ -500,31 +631,19 @@ export default function App() {
     // getUserMedia stream; speech recognition does not, and gets its own. So a
     // failure here costs the animation and nothing else — saying "voice input
     // is unavailable" was both alarming and untrue.
-    try {
-      await startAnalyser()
-    } catch {
-      console.warn(
-        '[jarvis] no microphone stream — the reactor will not pulse with your ' +
-          'voice. Speech recognition is unaffected.',
-      )
+    if (!useWorkspace.getState().settings.privacyMode) {
+      try {
+        await startAnalyser()
+      } catch {
+        console.warn(
+          '[jarvis] no microphone stream — the reactor will not pulse with your ' +
+            'voice. Speech recognition is unaffected.',
+        )
+      }
     }
 
-    // Ask the bridge which speech engines exist before the loop starts, so the
-    // first turn already uses ElevenLabs when a key is present and the browser
-    // fallback when it is not — no flag, no reload.
-    await probeCapabilities()
-
-    // One voice loop, started once, running until the page closes.
-    voice.current = await startVoice({
-      mode,
-      onWake,
-      onSpeechStart,
-      onPartial,
-      onUtterance,
-      onError: onVoiceError,
-    })
-
-    store.getState().setPhase('dormant')
+    if (useWorkspace.getState().settings.privacyMode) store.getState().setPhase('dormant')
+    else await startVoiceLoop()
   }
 
   // -- clap to start --------------------------------------------------------
@@ -542,7 +661,7 @@ export default function App() {
    * about a feature nobody asked for would be worse than quietly doing without.
    */
   useEffect(() => {
-    if (phase !== 'offline') return
+    if (phase !== 'offline' || window.jarvisDesktop) return
     let live: { stop: () => void } | null = null
     let gone = false
     void listenForClap(() => {
@@ -562,8 +681,14 @@ export default function App() {
 
   useEffect(() => {
     let raf = 0
+    let lastMeterUpdate = 0
 
-    const pump = () => {
+    const pump = (now = performance.now()) => {
+      if (document.hidden || now - lastMeterUpdate < 66) {
+        raf = requestAnimationFrame(pump)
+        return
+      }
+      lastMeterUpdate = now
       const st = store.getState()
       // While speaking, follow JARVIS's own output rather than the mic, so the
       // orb lip-syncs instead of reacting to room noise.
@@ -571,14 +696,14 @@ export default function App() {
         st.phase === 'speaking' && speaker.current
           ? speaker.current.level()
           : micLevel()
-      st.setLevel(lvl)
+      if (Math.abs(lvl - st.level) >= .015 || (lvl === 0 && st.level !== 0)) st.setLevel(lvl)
       raf = requestAnimationFrame(pump)
     }
     pump()
 
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(tag) || (e.target as HTMLElement)?.isContentEditable) return
 
       // V auditions the next British voice installed on this machine. Which
       // ones exist varies per Mac, so hearing them beats trusting a ranking.
@@ -596,7 +721,7 @@ export default function App() {
         silence()
         const demo = createSpeaker()
         speaker.current = demo
-        demo.say(`Voice set to ${name.replace(/\(.*?\)/g, '').trim()}. At your service, sir.`)
+        demo.say('Voz em português selecionada. À sua disposição, senhor.')
         void demo.end()
         return
       }
@@ -638,7 +763,7 @@ export default function App() {
         silence()
         const t = createSpeaker()
         speaker.current = t
-        t.say('Audio test. If you can hear this, speech output is working, sir.')
+        t.say('Teste de áudio. Se consegue me ouvir, a voz está funcionando, senhor.')
         void t.end().then(() => {
           const d = (window as unknown as Record<string, Record<string, unknown>>).__tts
           console.info('[jarvis] audio test →', d)
@@ -663,6 +788,7 @@ export default function App() {
       // a missed wake word doesn't cost a take.
       if (e.code !== 'Space' || e.repeat) return
       e.preventDefault()
+      voice.current?.arm?.(30000, true)
 
       const phase = store.getState().phase
       if (phase === 'offline') {
@@ -686,6 +812,7 @@ export default function App() {
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey)
       clearIdle()
+      clearClarification()
       if (voicePoll.current) clearInterval(voicePoll.current)
       voice.current?.stop()
       speaker.current?.cancel()
@@ -698,7 +825,16 @@ export default function App() {
   return (
     <>
       <Scene />
+      <WorkspacePanel onStop={goDormant} onPauseVoice={pauseVoiceForEnrollment} onResumeVoice={resumeVoiceAfterEnrollment} onRepeat={(text) => { goDormant(); void respond(text) }} onTestVoice={() => {
+        goDormant()
+        const mine = turn.current
+        const test = createSpeaker()
+        speaker.current = test
+        test.say('Teste de voz em português. Minha fala está no volume definido no aplicativo. Ajuste também o volume do Chrome no Windows, se necessário.')
+        void test.end().then(() => { if (mine === turn.current) { speaker.current = null; listen(0) } })
+      }} />
       <Hud />
+      <MissionControl send={(text) => { goDormant(); void respond(text) }} />
       <Boot />
       <Diagnostics />
       <Ignition onStart={() => void powerOn()} />

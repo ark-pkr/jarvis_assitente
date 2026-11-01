@@ -1,5 +1,6 @@
 import type { AskHandlers } from './anthropic'
 import type { Blade, Panel } from '../store'
+import { conversationContext, useWorkspace, flushWorkspace } from '../workspace'
 import { BRIDGE_WS_URL } from '../config'
 
 /**
@@ -19,6 +20,10 @@ import { BRIDGE_WS_URL } from '../config'
 /** Anything the bridge sends. Deliberately loose — a frame from a future
  *  bridge build should be ignored, not crash the turn. */
 type Frame = {
+  action?: string
+  url?: string
+  details?: string
+  note?: string
   type?: string
   delta?: string
   name?: string
@@ -35,6 +40,13 @@ type Frame = {
   seconds?: number
   when?: string
   servers?: Array<string | { name?: string }>
+}
+
+export type Approval = { id: string; action: string; url: string; details: string; decide: (approved: boolean) => void }
+let onApproval: ((approval: Approval | null) => void) | undefined
+export function watchApproval(handler: (approval: Approval | null) => void) {
+  onApproval = handler
+  return () => { onApproval = undefined }
 }
 
 /** Every question gets an id so its answer can be told from anyone else's. */
@@ -168,7 +180,23 @@ function dispatch(ws: WebSocket) {
       return
     }
 
-    if (msg.type === 'ready') {
+    if (msg.type === 'memory' && msg.id) {
+      const state = useWorkspace.getState()
+      const next = [state.memory, msg.note].filter(Boolean).join('\n')
+      const saved = state.settings.remember && next.length <= 6000 && typeof msg.note === 'string'
+      if (saved) { state.setMemory(next); flushWorkspace() }
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'reply', id: msg.id, saved: saved && !useWorkspace.getState().storageError }))
+    } else if (msg.type === 'approval' && msg.id) {
+      const id = msg.id
+      const decide = (approved: boolean) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'reply', id, approved }))
+        onApproval?.(null)
+      }
+      if (onApproval) onApproval({ id, action: msg.action || 'Ação no navegador', url: msg.url || '', details: msg.details || '', decide })
+      else decide(false)
+    } else if (msg.type === 'approval_cancel') {
+      onApproval?.(null)
+    } else if (msg.type === 'ready') {
       // The bridge announces immediately on connect from Claude Code's config,
       // then again with live status once the agent initialises. Keep listening
       // so the later, more accurate list wins.
@@ -273,6 +301,7 @@ function connect(): Promise<WebSocket> {
       )
     }
     ws.onclose = () => {
+      onApproval?.(null)
       // A close before open is just a failed dial; after open it's a lost
       // session, and the two want different handling.
       settle(new Error('The bridge closed the connection.'))
@@ -316,6 +345,7 @@ let pending: { finish: (fallback?: string) => void } | null = null
 export async function ask(
   prompt: string,
   handlers: AskHandlers,
+  request: { fast: boolean; article: boolean; privacyMode: boolean },
 ): Promise<{ text: string; tools: string[] }> {
   /**
    * A new question supersedes the one in flight.
@@ -467,7 +497,10 @@ export async function ask(
     arm()
 
     try {
-      ws.send(JSON.stringify({ type: 'ask', text: prompt, id }))
+      const saved = conversationContext()
+      // App has already added this question to the log. Send only prior turns.
+      if (saved.context.at(-1)?.role === 'user' && saved.context.at(-1)?.text === prompt) saved.context.pop()
+      ws.send(JSON.stringify({ type: 'ask', text: prompt, id, ...saved, fast: request.fast, article: request.article, privacyMode: request.privacyMode }))
     } catch (err) {
       // The socket can go into CLOSING between connect() resolving and here.
       fail(err instanceof Error ? err : new Error(String(err)))

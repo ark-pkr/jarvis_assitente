@@ -6,6 +6,7 @@
 // JARVIS. Every check degrades to a single friendly line if something is not
 // there, and the script always exits 0 — it is advice, not a gate.
 
+import '../bridge/env.mjs';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -36,7 +37,13 @@ try {
 }
 
 // --- Claude CLI on PATH ---------------------------------------------------
+const usesGemini = (process.env.JARVIS_PROVIDER || 'gemini') === 'gemini';
+if (usesGemini) {
+  line(process.env.GEMINI_API_KEY?.trim() ? tick : warn,
+    process.env.GEMINI_API_KEY?.trim() ? 'Gemini API key configured.' : 'Set GEMINI_API_KEY in .env.local (see README-GEMINI.md).');
+}
 let claudeFound = false;
+if (!usesGemini) {
 try {
   const res = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 10000 });
   if (res.status === 0 && res.stdout) {
@@ -53,6 +60,7 @@ if (!claudeFound) {
   line(info, 'Then run `claude` once and complete login. The bridge uses that login — no API key needed.');
 }
 
+}
 // --- ~/.claude.json and MCP servers --------------------------------------
 const claudeJsonPath = join(homedir(), '.claude.json');
 let mcpCount = 0;
@@ -106,11 +114,11 @@ if (elSource) {
 // --- How to run ----------------------------------------------------------
 console.log('');
 console.log('To run JARVIS, open two terminals:');
-console.log('  1)  npm run bridge      # the brain (Claude Code, headless)');
+console.log(`  1)  npm run bridge      # the brain (${usesGemini ? 'Gemini API' : 'Claude Code, headless'})`);
 console.log('  2)  npm run dev         # the face (open http://localhost:5173 in Chrome)');
 console.log('');
 console.log('Then click INITIALISE and say "Hey Jarvis".');
-console.log('To let JARVIS take real actions (phone, browser, sending), run `npm run bridge:writes` instead of `npm run bridge`.');
+console.log('Or run both with `npm start`. To enable actions: `npm start -- --writes`.');
 console.log('');
 
 process.exit(0);

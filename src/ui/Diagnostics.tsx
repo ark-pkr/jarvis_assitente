@@ -29,6 +29,7 @@ type VoiceDiag = {
   dropped: string
   accepted: number
   restarts: number
+  transcriptionFailures: number
   idleMs: number
 }
 
@@ -111,7 +112,8 @@ export function Diagnostics() {
         v={`${((v.idleMs ?? 0) / 1000).toFixed(1)}s`}
         bad={(v.idleMs ?? 0) > 15000}
       />
-      <Row k="forced restarts" v={String(v.restarts ?? 0)} bad={(v.restarts ?? 0) > 0} />
+      <Row k="recogniser restarts" v={String(v.restarts ?? 0)} bad={(v.restarts ?? 0) > 0} />
+      <Row k="transcription failures" v={String(v.transcriptionFailures ?? 0)} bad={(v.transcriptionFailures ?? 0) > 0} />
       <Row k="mode" v={`${v.mode ?? '—'} (phase ${phase})`} />
       <Row k="accepted" v={String(v.accepted ?? 0)} bad={(v.accepted ?? 0) === 0} />
       <Row k="wakes" v={String(v.wakes ?? 0)} />

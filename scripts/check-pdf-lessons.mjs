@@ -1,0 +1,36 @@
+import { chromium } from 'playwright-core'
+import assert from 'node:assert/strict'
+const browser = await chromium.launch({ channel: 'chrome', headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 960 } })
+  const open = async () => {
+    await page.getByRole('button', { name: /INICIAR JARVIS/ }).waitFor()
+    await page.evaluate(async () => (await import('/src/store.ts')).useStore.setState({ phase: 'dormant' }))
+    await page.getByRole('button', { name: 'Histórico e ajustes', exact: true }).click()
+    await page.getByRole('button', { name: 'Aprender', exact: true }).click()
+  }
+  await page.goto('http://localhost:5173'); await open()
+  const start = page.getByRole('button', { name: 'Iniciar aula com exemplos', exact: true })
+  assert.equal(await start.isDisabled(), true)
+  await page.getByLabel('Pasta do PDF', { exact: true }).fill('C:\\Estudos')
+  await page.getByLabel('Arquivo PDF da aula', { exact: true }).fill('aula.pdf')
+  assert.equal(await start.isEnabled(), true)
+  await page.getByLabel('Página inicial do PDF').fill('10')
+  await page.getByLabel('Página final do PDF').fill('50')
+  assert.equal(await page.getByLabel('Página final do PDF').inputValue(), '14')
+  await page.getByLabel('Destino dos exemplos').selectOption('vscode')
+  assert.equal(await start.isDisabled(), true)
+  await page.getByLabel('Pasta dos exemplos').fill('C:\\Exemplos')
+  await page.getByLabel('Arquivo de exemplo', { exact: true }).fill('repeticoes.py')
+  assert.equal(await start.isEnabled(), true)
+  await page.evaluate(async () => (await import('/src/workspace.ts')).flushWorkspace())
+  await page.reload(); await open()
+  assert.equal(await page.getByLabel('Pasta do PDF', { exact: true }).inputValue(), 'C:\\Estudos')
+  assert.equal(await page.getByLabel('Destino dos exemplos').inputValue(), 'vscode')
+  await page.getByRole('button', { name: 'Iniciar aula com exemplos', exact: true }).scrollIntoViewIfNeeded()
+  await page.screenshot({ path: '.ui-check.local/pdf-lesson.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  const bounds = await page.locator('.workspace-panel').boundingBox()
+  assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 390)
+  console.log('PDF lesson controls, page limits, destination validation and persistence passed.')
+} finally { await browser.close() }

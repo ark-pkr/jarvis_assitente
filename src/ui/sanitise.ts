@@ -219,14 +219,14 @@ export function sanitisePanelHtml(html: string): string {
       ALLOWED_TAGS: [
         'div', 'span', 'p', 'ul', 'ol', 'li', 'img', 'b', 'strong', 'em', 'i',
         'br', 'small', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'code', 'pre',
+        'h1', 'h2', 'h3', 'h4', 'hr',
+        'a',
         // Showing a video result as a line of text was the polite version of
         // refusing to answer.
         'video', 'source', 'iframe',
       ],
-      // No href — a HUD panel isn't clickable, and it keeps navigation off the
-      // table entirely.
       ALLOWED_ATTR: [
-        'class', 'src', 'alt', 'style',
+        'class', 'src', 'alt', 'style', 'href', 'target', 'rel',
         'controls', 'poster', 'loop', 'muted', 'playsinline', 'preload',
         'width', 'height', 'allow', 'allowfullscreen', 'referrerpolicy',
         'type', 'title',
@@ -244,6 +244,7 @@ export function sanitisePanelHtml(html: string): string {
       ADD_URI_SAFE_ATTR: [
         'controls', 'loop', 'muted', 'playsinline', 'preload', 'width',
         'height', 'allow', 'allowfullscreen', 'referrerpolicy', 'type',
+        'target', 'rel',
       ],
       // http(s) is permitted here and then immediately taken away again:
       // rewriteMedia below turns every remote src into a bridge URL, so nothing
@@ -255,6 +256,20 @@ export function sanitisePanelHtml(html: string): string {
     }),
     'text/html',
   )
+  doc.body.querySelectorAll('a[href]').forEach((anchor) => {
+    try {
+      const url = new URL(anchor.getAttribute('href') ?? '')
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+        anchor.removeAttribute('href')
+        return
+      }
+      anchor.setAttribute('href', url.href)
+      anchor.setAttribute('target', '_blank')
+      anchor.setAttribute('rel', 'noopener noreferrer')
+    } catch {
+      anchor.removeAttribute('href')
+    }
+  })
   /**
    * `style` survives only for the --v custom property the progress bar uses.
    *
@@ -278,4 +293,21 @@ export function sanitisePanelHtml(html: string): string {
   rewriteEmbeds(doc.body)
   hardenMedia(doc.body)
   return doc.body.innerHTML
+}
+
+export function openResearchLink(event: React.MouseEvent<HTMLElement>) {
+  const target = event.target
+  if (!(target instanceof Element)) return
+  const anchor = target.closest('a[href]')
+  if (!anchor || !event.currentTarget.contains(anchor)) return
+  let url: URL
+  try { url = new URL(anchor.getAttribute('href') ?? '') } catch { return }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return
+  event.preventDefault()
+  const open = window.jarvisDesktop?.openExternal
+  if (open) {
+    void open(url.href).catch((error) => console.error('[jarvis] could not open research source:', error))
+  } else {
+    window.open(url.href, '_blank', 'noopener,noreferrer')
+  }
 }

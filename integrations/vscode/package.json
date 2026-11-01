@@ -1,0 +1,20 @@
+{
+  "name": "jarvis-local",
+  "displayName": "JARVIS Local",
+  "publisher": "jarvis",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.cjs",
+  "activationEvents": ["onCommand:jarvis.shareSelection", "onCommand:jarvis.shareDiagnostics"],
+  "contributes": {
+    "commands": [
+      { "command": "jarvis.shareSelection", "title": "JARVIS: Compartilhar seleção" },
+      { "command": "jarvis.shareDiagnostics", "title": "JARVIS: Compartilhar diagnósticos" }
+    ],
+    "menus": {
+      "editor/context": [{ "command": "jarvis.shareSelection", "when": "editorHasSelection", "group": "navigation" }],
+      "commandPalette": [{ "command": "jarvis.shareDiagnostics" }]
+    },
+    "configuration": { "title": "JARVIS", "properties": { "jarvis.snapshotDirectory": { "type": "string", "default": "", "description": "Pasta .jarvis-data do seu JARVIS local. Seleção e diagnósticos só são gravados após confirmação explícita." } } }
+  }
+}

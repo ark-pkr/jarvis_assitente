@@ -379,6 +379,27 @@ export function uiServer(emit) {
         return ok('Reactor adjusted.')
       }),
 
+      tool(
+        'ui_helios',
+        'Controla o holograma HELIOS quando ele estiver selecionado. Use para atender pedidos explícitos de cor, pausa, modo cinema, abertura ou desempenho. Para pausar ou entrar no modo cinema, omita value ou use true; para continuar ou sair do cinema, use false. Para azul use cyan; para verde use emerald. O pedido também seleciona o HELIOS sem alterar os demais visuais.',
+        {
+          action: z.enum(['pause', 'color', 'cinema', 'intro', 'quality', 'reset']).describe('Ação que deve ser aplicada ao HELIOS.'),
+          value: z.union([
+            z.boolean(),
+            z.enum(['gold', 'amber', 'cyan', 'blue', 'violet', 'purple', 'emerald', 'green', 'rose', 'pink', 'auto', 'eco', 'balanced', 'ultra']),
+          ]).optional().describe('Valor da ação: pause/cinema recebem true ou false; color recebe uma cor; quality recebe auto, eco, balanced ou ultra.'),
+        },
+        async ({ action, value }) => {
+          if (['pause', 'cinema'].includes(action) && value !== undefined && typeof value !== 'boolean') {
+            return refuse(`Not changed: ${action} accepts true or false.`)
+          }
+          if (action === 'color' && typeof value !== 'string') return refuse('Not changed: color needs a supported palette name.')
+          if (action === 'quality' && !['auto', 'eco', 'balanced', 'ultra'].includes(String(value))) return refuse('Not changed: quality must be auto, eco, balanced or ultra.')
+          emit('helios', { action, value: value === undefined && ['pause', 'cinema'].includes(action) ? true : value })
+          return ok('HELIOS updated.')
+        },
+      ),
+
       tool('ui_orbit', ORBIT_DESCRIPTION, orbitSchema, async (args) => {
         const action = args.action ?? 'add'
 

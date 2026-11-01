@@ -223,10 +223,9 @@ export function Core({ drive }: { drive: Drive }) {
 
   const uniforms = useMemo(
     () => ({
-      uColor: { value: new THREE.Color('#19c4c4') },
-      // Not white — a tinted highlight keeps the hue readable once bloom
-      // stacks on top, instead of washing the ring out to a grey band.
-      uHot: { value: new THREE.Color('#c9fdff') },
+      uColor: { value: new THREE.Color('#e9822d') },
+      // Warm highlights keep the plasma glow golden instead of clipping to cyan.
+      uHot: { value: new THREE.Color('#fff0bc') },
       uLevel: { value: 0 },
       uPhase: { value: 0 },
       uOpen: { value: 0 },

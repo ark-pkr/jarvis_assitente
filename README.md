@@ -1,5 +1,7 @@
 # J.A.R.V.I.S.
 
+> **Esta cópia usa Gemini API por padrão.** Consulte [README-GEMINI.md](README-GEMINI.md) para configurar a chave e iniciar sem Claude Code. A documentação original abaixo descreve o backend Claude, ainda disponível com `JARVIS_PROVIDER=claude`.
+
 A browser voice assistant with an Iron Man holographic interface. Say
 **"Hey Jarvis"**, he wakes, listens, and does real things through your tools —
 searches the web, generates images, drives your phone, reads your mail. The face

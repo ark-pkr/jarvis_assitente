@@ -1,240 +1,156 @@
-import { useMemo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import {
-  EffectComposer,
-  Bloom,
-  ChromaticAberration,
-  Vignette,
-  Noise,
-} from '@react-three/postprocessing'
-import { BlendFunction } from 'postprocessing'
-import * as THREE from 'three'
-import { Core } from './Core'
-import { Particles } from './Particles'
-import { Orbits } from './Orbits'
-import { useStore, phaseColor, accentFor, type Phase } from '../store'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useWorkspace, type HeliosSettings } from '../workspace'
+import { accentFor, useStore } from '../store'
+import { NeuralSphere } from './NeuralSphere'
+export type { Drive } from './DetailedScene'
 
-/** Rings spin harder while JARVIS is working — reads as effort. */
-const spinFor: Record<Phase, number> = {
-  offline: 0.08, // barely turning — the machine is off
-  boot: 3.2,
-  dormant: 0.25,
-  waking: 4.5,
-  listening: 1.1,
-  thinking: 2.8,
-  tooling: 3.6,
-  speaking: 1.4,
-}
+// Load WebGL only if the user opts into the full visual effects.
+const Detailed = lazy(() => import('./DetailedScene').then((module) => ({ default: module.DetailedScene })))
 
-/**
- * Surface displacement amplitude. Both states where nothing is happening get
- * the calm figure: 'offline' is the quietest moment in the whole piece — the
- * reactor hasn't been powered on yet — so it must not be the most agitated
- * thing on screen.
- */
-/*
- * Much lower than they were. At 0.13/0.26 on a unit sphere the displacement is
- * a quarter of the radius, which is not a reactor breathing — it is a potato.
- * The reference core is a clean circle whose surface only shimmers; the drama
- * belongs to the instrument rings around it, not to the silhouette.
- */
-const AMP_CALM = 0.035
-const AMP_LIVE = 0.085
-
-/**
- * Everything the three children animate from, in one mutable object.
- *
- * These used to be render-time props, which had two consequences. The scene
- * subscribed to mic level, so the entire r3f tree reconciled sixty times a
- * second for numbers that never leave useFrame; and because they were only
- * delivered on a re-render, they were delivered late or — before the analyser
- * starts and `level` is a constant zero — not at all, which is why the ignition
- * screen never picked up its own spin rate.
- *
- * Nothing here belongs in React state. The scene is updated by mutation and
- * React only ever mounts it: Rig writes this object once per frame, the
- * children read it in their own useFrame. Children subscribe to the frame loop
- * before their parent does, so they are reading the previous frame's values —
- * one frame of lag on quantities that are all lerped anyway, and invisible.
- */
-export type Drive = {
-  color: THREE.Color
-  /** 0..1 smoothed loudness, with an idle breath under it. */
-  level: number
-  /** Rotation multiplier for the drifting dust. */
-  spin: number
-  /** Target displacement amplitude for the core surface. */
-  amp: number
-  /** 0..1 power-up reveal — the ring assembles outwards from the centre. */
-  open: number
-  /**
-   * The reactor slice of the ui state, already resolved and smoothed.
-   *
-   * Everything here is a no-op at UI_DEFAULTS: colour follows the phase exactly
-   * as it always did, and the three multipliers sit at one.
-   */
-  reactor: {
-    /** ui.reactor.color if set, otherwise the accent. */
-    color: THREE.Color
-    scale: number
-    intensity: number
-    /** Multiplier on the ring's own rotation rate. */
-    spin: number
-    /** 0 ring, 1 sphere, 2 wire — a number because it ends up in a uniform. */
-    style: number
-    visible: boolean
-  }
-}
-
-/**
- * A colour target that only re-parses when the string actually changes.
- *
- * The colours in the ui slice are arbitrary CSS written by JARVIS, and
- * THREE.Color.set logs a warning for anything it cannot parse. Setting one
- * unconditionally per frame turns a single typo into sixty console lines a
- * second, which drowns everything else out during a demo.
- */
-type Tint = { key: string; color: THREE.Color }
-
-function aim(tint: Tint, css: string): THREE.Color {
-  if (tint.key !== css) {
-    tint.key = css
-    tint.color.set(css)
-  }
-  return tint.color
-}
-
-const STYLE_INDEX = { ring: 0, sphere: 1, wire: 2 } as const
-
-function Rig() {
-  const drive = useMemo<Drive>(
-    () => ({
-      color: new THREE.Color(phaseColor.offline),
-      level: 0,
-      spin: spinFor.offline,
-      amp: AMP_CALM,
-      open: 0,
-      reactor: {
-        color: new THREE.Color(phaseColor.offline),
-        scale: 1,
-        intensity: 1,
-        spin: 1,
-        style: STYLE_INDEX.ring,
-        visible: true,
-      },
-    }),
-    [],
-  )
-  const target = useMemo<Tint>(() => ({ key: '', color: new THREE.Color() }), [])
-  const reactorTarget = useMemo<Tint>(
-    () => ({ key: '', color: new THREE.Color() }),
-    [],
-  )
-
-  useFrame((state, dt) => {
-    // Read imperatively rather than subscribing — see the note on Drive.
-    const { phase, level, ui } = useStore.getState()
-
-    // accentFor owns the accent -> palette -> phase resolution order. The scene
-    // asking the store for the answer rather than working it out again is what
-    // keeps the orb and the HUD from ever disagreeing about the colour.
-    const accent = accentFor(phase, ui)
-    drive.color.lerp(aim(target, accent), Math.min(1, dt * 2.5))
-
-    const r = ui.reactor
-    drive.reactor.color.lerp(
-      aim(reactorTarget, r.color ?? accent),
-      Math.min(1, dt * 2.5),
-    )
-    // Smoothed rather than assigned, so "make it twice the size" grows into
-    // place instead of snapping. The style is the exception: it is a mode, and
-    // easing between two of them would drag the picture through the third.
-    const k = Math.min(1, dt * 5)
-    drive.reactor.scale += (r.scale - drive.reactor.scale) * k
-    drive.reactor.intensity += (r.intensity - drive.reactor.intensity) * k
-    drive.reactor.spin += (r.spin - drive.reactor.spin) * k
-    drive.reactor.style = STYLE_INDEX[r.style] ?? STYLE_INDEX.ring
-    drive.reactor.visible = r.visible
-
-    drive.spin += (spinFor[phase] - drive.spin) * Math.min(1, dt * 2)
-    drive.amp = phase === 'dormant' || phase === 'offline' ? AMP_CALM : AMP_LIVE
-    // Held shut until the reactor is powered on, so the ring builds itself out
-    // of the centre on the ignition click rather than simply appearing.
-    drive.open = phase === 'offline' ? 0.28 : phase === 'boot' ? 0.7 : 1.6
-
-    // Idle breathing so the orb is never completely still.
-    const idle = phase === 'offline' ? 0.02 : phase === 'dormant' ? 0.05 : 0.12
-    const breathe =
-      (Math.sin(state.clock.elapsedTime * 0.9) * 0.5 + 0.5) * idle
-    const want = Math.max(level, breathe)
-    drive.level += (want - drive.level) * Math.min(1, dt * 9)
-
-    // Slow drift on the camera keeps handheld-ish life in the shot.
-    const t = state.clock.elapsedTime
-    state.camera.position.x = Math.sin(t * 0.13) * 0.35
-    state.camera.position.y = Math.cos(t * 0.17) * 0.22
-    state.camera.lookAt(0, 0, 0)
-  })
-
-  // Nothing in here is lit: both the core and the dust are raw ShaderMaterials,
-  // which do not read the light list. The scene therefore has no lights at all.
-  //
-  // The tilted gyro rings that used to sit here are gone. Steeply tilted arcs
-  // crossing in front of a complete circle do not read as depth — they read as
-  // scratches on the lens, and as broken circles in a design whose whole
-  // subject is one unbroken one.
-  return (
-    <>
-      <Core drive={drive} />
-      <Particles drive={drive} />
-      <Orbits />
-    </>
-  )
+function LightScene({ active }: { active: boolean }) {
+  const phase = useStore((state) => state.phase)
+  const ui = useStore((state) => state.ui)
+  const visualTheme = useWorkspace((state) => state.settings.visualTheme)
+  const embers = useMemo(() => visualTheme === 'reactor' ? Array.from({ length: 320 }, (_, index) => {
+    const random = (salt: number) => {
+      const value = Math.sin((index + 1) * salt) * 43758.5453
+      return value - Math.floor(value)
+    }
+    return {
+      angle: `${random(12.9898) * 360}deg`,
+      radius: `${6 + random(78.233) * 45}cqw`,
+      size: `${1 + random(39.425) * 2.6}px`,
+      delay: `${-random(22.14) * 4}s`,
+      opacity: `${0.35 + random(17.31) * 0.65}`,
+      color: random(57.583) > 0.78 ? '#ffe4a0' : '#ff9636',
+      streak: index % 8 === 0,
+    }
+  }) : [], [visualTheme])
+  return <div className="scene scene-light" data-paused={!active} data-theme={visualTheme} aria-hidden="true" style={{
+    ['--reactor-color' as string]: ui.reactor.color || accentFor(phase, ui),
+    ['--reactor-scale' as string]: ui.reactor.scale,
+  }}>
+    <div className="holo-grid" />
+    {ui.reactor.visible && visualTheme === 'sphere' ? <div className={`neural-sphere light-reactor-${phase}`}>
+      <NeuralSphere active={active} />
+      <div className="sphere-readout"><small>CAMPO NEURAL</small><b>{phase === 'speaking' ? 'RESPONDENDO' : ['thinking', 'tooling'].includes(phase) ? 'PROCESSANDO' : phase === 'listening' ? 'ESCUTA ATIVA' : 'J.A.R.V.I.S.'}</b>
+        <div className="sphere-wave">{[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} style={{ animationDelay: `${i * -.16}s` }} />)}</div>
+      </div>
+    </div> : ui.reactor.visible && <div className={`light-reactor light-reactor-${phase}`}>
+      <div className="holo-particles" />
+      <div className="holo-ticks" /><div className="light-ring outer" />
+      <div className="holo-orbit" /><div className="light-ring inner" />
+      <div className="holo-reticle" /><div className="light-reactor-core" />
+      <div className="ember-field">{embers.map((ember, index) => <i
+        key={index}
+        className={ember.streak ? 'ember-streak' : undefined}
+        style={{
+          ['--spark-angle' as string]: ember.angle,
+          ['--spark-radius' as string]: ember.radius,
+          ['--spark-size' as string]: ember.size,
+          ['--spark-delay' as string]: ember.delay,
+          ['--spark-opacity' as string]: ember.opacity,
+          ['--spark-color' as string]: ember.color,
+        } as CSSProperties}
+      />)}</div>
+      <svg className="reactor-engineering" viewBox="0 0 600 600">
+        <defs><radialGradient id="core-light"><stop stopColor="#fff8d8"/><stop offset=".14" stopColor="#ffd46a"/><stop offset=".48" stopColor="#f07822" stopOpacity=".72"/><stop offset="1" stopColor="#421506" stopOpacity="0"/></radialGradient><linearGradient id="reactor-metal" x2="0" y2="1"><stop stopColor="#ffd486"/><stop offset=".4" stopColor="#5a2a12"/><stop offset="1" stopColor="#c57a37"/></linearGradient></defs>
+        <circle cx="300" cy="300" r="279" fill="none" stroke="url(#reactor-metal)" strokeWidth="13"/>
+        <circle cx="300" cy="300" r="261" fill="none" stroke="currentColor" strokeWidth="1"/>
+        <circle className="reactor-segments" cx="300" cy="300" r="240" fill="none" stroke="currentColor" strokeWidth="17" strokeDasharray="4 21"/>
+        <circle cx="300" cy="300" r="213" fill="none" stroke="#ffbf5b" strokeWidth="2" strokeDasharray="60 8 4 8"/>
+        <circle cx="300" cy="300" r="187" fill="#160903" stroke="url(#reactor-metal)" strokeWidth="18"/>
+        <circle cx="300" cy="300" r="163" fill="url(#core-light)"/>
+        <circle cx="300" cy="300" r="144" fill="none" stroke="#ffd982" strokeWidth="1" strokeDasharray="2 8" opacity=".8"/>
+        {Array.from({ length: 24 }, (_, i) => <path key={i} transform={`rotate(${i * 15} 300 300)`} d="M297 84 L303 84 L301 104 L299 104 Z" fill="#ffc76d" opacity={i % 3 === 0 ? '.9' : '.38'}/>)}
+        {[0, 90, 180, 270].map((angle) => <g key={angle} transform={`rotate(${angle} 300 300)`}><rect x="288" y="14" width="24" height="12" rx="2" fill="#ffd58d"/><path d="M300 36 V62" stroke="#e9a754" strokeWidth="2"/></g>)}
+      </svg>
+      <div className="holo-readout"><small>NÚCLEO NEURAL</small><b>{phase === 'speaking' ? 'RESPOSTA' : ['thinking', 'tooling'].includes(phase) ? 'RACIOCÍNIO' : phase === 'listening' ? 'ESCUTA ATIVA' : 'J.A.R.V.I.S.'}</b>
+        <div className="holo-wave">{[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} style={{ animationDelay: `${i * -.16}s` }} />)}</div>
+      </div>
+    </div>}
+  </div>
 }
 
 export function Scene() {
-  return (
-    <Canvas
-      className="scene"
-      camera={{ position: [0, 0, 6.2], fov: 45 }}
-      gl={{ antialias: true, alpha: true }}
-      dpr={[1, 2]}
-    >
-      <Rig />
-      {/*
-        multisampling={0} on purpose. The default is 8, which allocates a
-        half-float MSAA target — at dpr 2 that is a 3200x1800 buffer — and there
-        is not one polygon edge in this scene for it to smooth: everything is
-        additive blobs, point sprites and lines, all of which are already
-        soft-edged by their own falloff and then blurred again by bloom.
-
-        Tone mapping is also deliberate, if less obviously so. EffectComposer
-        forces gl.toneMapping to NoToneMapping while it is mounted (there is no
-        prop for it), so the additive output clips instead of rolling off. That
-        hard clip to white is the neon look this piece wants — the sweep and the
-        rim are meant to blow out. If you ever want the filmic roll-off back,
-        add a <ToneMapping mode={ToneMappingMode.ACES_FILMIC} /> effect at the
-        end of this chain rather than touching the renderer.
-      */}
-      <EffectComposer multisampling={0}>
-        {/* Bloom is what turns additive lines into "hologram". */}
-        <Bloom
-          intensity={1.15}
-          // A higher threshold keeps the mid-tones intact so the orb doesn't
-          // flatten into a solid white disc.
-          luminanceThreshold={0.22}
-          luminanceSmoothing={0.85}
-          mipmapBlur
-          radius={0.72}
-        />
-        <ChromaticAberration
-          offset={new THREE.Vector2(0.0009, 0.0012)}
-          radialModulation={false}
-          modulationOffset={0}
-        />
-        <Noise opacity={0.035} blendFunction={BlendFunction.OVERLAY} />
-        <Vignette eskil={false} offset={0.22} darkness={0.95} />
-      </EffectComposer>
-    </Canvas>
-  )
+  const light = useWorkspace((state) => state.settings.lightVisuals)
+  const visualTheme = useWorkspace((state) => state.settings.visualTheme)
+  const heliosFrame = useRef<HTMLIFrameElement>(null)
+  const [active, setActive] = useState(!document.hidden)
+  useEffect(() => {
+    const update = () => setActive(!document.hidden)
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
+  useEffect(() => {
+    if (visualTheme !== 'helios') return
+    const frame = heliosFrame.current
+    let lastLevelAt = 0
+    const sendState = (force = false) => {
+      const current = useStore.getState()
+      const settings = useWorkspace.getState().settings.helios
+      const now = performance.now()
+      if (!force && now - lastLevelAt < 50) return
+      lastLevelAt = now
+      heliosFrame.current?.contentWindow?.postMessage({
+        channel: 'jarvis-helios',
+        type: 'state',
+        phase: current.phase,
+        level: current.level,
+        visible: !document.hidden,
+        settings,
+      }, window.location.origin)
+    }
+    const loaded = () => sendState(true)
+    const visibilityChanged = () => sendState(true)
+    frame?.addEventListener('load', loaded)
+    document.addEventListener('visibilitychange', visibilityChanged)
+    const unsubscribeStore = useStore.subscribe((state, previous) => {
+      if (state.phase !== previous.phase || state.level !== previous.level) sendState()
+    })
+    const unsubscribeWorkspace = useWorkspace.subscribe((state, previous) => {
+      if (state.settings.helios !== previous.settings.helios) sendState(true)
+    })
+    sendState(true)
+    return () => {
+      frame?.removeEventListener('load', loaded)
+      document.removeEventListener('visibilitychange', visibilityChanged)
+      unsubscribeStore()
+      unsubscribeWorkspace()
+    }
+  }, [visualTheme])
+  useEffect(() => {
+    if (visualTheme !== 'helios') return
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== heliosFrame.current?.contentWindow) return
+      const data = event.data as { channel?: unknown; type?: unknown; settings?: Partial<HeliosSettings> } | null
+      if (data?.channel !== 'jarvis-helios' || data.type !== 'settings' || !data.settings || typeof data.settings !== 'object') return
+      const value = data.settings
+      const patch: Partial<HeliosSettings> = {}
+      if (typeof value.paused === 'boolean') patch.paused = value.paused
+      if (typeof value.speed === 'number' && Number.isFinite(value.speed)) patch.speed = Math.max(0, Math.min(3, value.speed))
+      if (typeof value.glow === 'number' && Number.isFinite(value.glow)) patch.glow = Math.max(.3, Math.min(2, value.glow))
+      if (typeof value.separation === 'number' && Number.isFinite(value.separation)) patch.separation = Math.max(0, Math.min(1, value.separation))
+      if (['gold', 'cyan', 'violet', 'emerald', 'rose'].includes(String(value.color))) patch.color = value.color
+      if (['auto', 'eco', 'balanced', 'ultra'].includes(String(value.quality))) patch.quality = value.quality
+      if (typeof value.bloom === 'boolean') patch.bloom = value.bloom
+      if (typeof value.autoRotate === 'boolean') patch.autoRotate = value.autoRotate
+      if (typeof value.introOnStartup === 'boolean') patch.introOnStartup = value.introOnStartup
+      if (typeof value.cinema === 'boolean') patch.cinema = value.cinema
+      if (Number.isInteger(value.introSequence) && Number(value.introSequence) >= 0) patch.introSequence = value.introSequence
+      if (Object.keys(patch).length) useWorkspace.getState().setSettings({ helios: patch })
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [visualTheme])
+  if (visualTheme === 'helios') return <iframe
+    ref={heliosFrame}
+    className="scene helios-scene"
+    title="Holograma do reator HELIOS"
+    src="/holograma_3d_reator_helios_v4_1_cinematic.html?embedded=1"
+    allow="fullscreen; microphone 'none'; camera 'none'"
+    hidden={!active}
+  />
+  if (light) return <LightScene active={active} />
+  return <Suspense fallback={<LightScene active={active} />}><Detailed active={active} /></Suspense>
 }
