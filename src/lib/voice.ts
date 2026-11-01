@@ -2,6 +2,7 @@ import { BRIDGE_HTTP_URL } from '../config'
 import { getMic, startAnalyser } from './audio'
 import { speakingNow } from './tts'
 import { startVad, type Vad } from './vad'
+import { openLiveStt, type LiveAnswer, type LiveStt } from './liveStt'
 import { caps } from './capabilities'
 import { useWorkspace } from '../workspace'
 import { isExplicitInterruption } from './voiceGuard'
@@ -466,7 +467,14 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
    * Order is preserved because the drain is single-flight, which matters —
    * "London" arriving before "what's the weather in" is worse than either.
    */
-  const pendingAudio: { blob: Blob; generation: number; at: number; addressed: boolean }[] = []
+  const pendingAudio: { blob: Blob; generation: number; at: number; addressed: boolean; streamed: Promise<LiveAnswer | null> | null }[] = []
+  /** The segment being transcribed as it is said, once it may leave the machine. */
+  let stream: LiveStt | null = null
+  /** Its audio from the moment it began, until it is allowed to go. */
+  let unsent: Float32Array[] = []
+  /** After a failure the ordinary path is the reliable one for a while. */
+  let streamRetryAt = 0
+  const closeStream = () => { stream?.abort(); stream = null; unsent = [] }
   let draining = false
 
   /**
@@ -491,7 +499,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
    * transcript arriving — and the transcript belongs to the mode the user is in
    * now, not the one they interrupted.
    */
-  const transcribe = async ({ blob, generation: captured, at, addressed }: { blob: Blob; generation: number; at: number; addressed: boolean }) => {
+  const transcribe = async ({ blob, generation: captured, at, addressed, streamed }: (typeof pendingAudio)[number]) => {
     if (captured !== generation || Date.now() - at > 120000) return
     if (stopped || h.mode() === 'deaf') return
     const mode = h.mode()
@@ -535,8 +543,11 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
     }
     const t0 = performance.now()
     try {
-      let res: Response | null = null
-      for (let attempt = 0; attempt < 2; attempt++) {
+      const answer = streamed ? await streamed : null
+      if (streamed && !answer) streamRetryAt = Date.now() + 60000
+      if (stopped || captured !== generation) return
+      let res = answer ? new Response(JSON.stringify(answer)) : null
+      if (!res) for (let attempt = 0; attempt < 2; attempt++) {
         try {
           res = await fetch(`${BRIDGE_HTTP_URL}/stt`, {
             method: 'POST',
@@ -676,6 +687,8 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
     }
   }
 
+  const mayLeave = () => segmentMaySend({ localWake: Boolean(localWake), heldText: Boolean(assemble.held()), addressedAtStart, addressedUntil, now: Date.now() })
+
   vad = await startVad({
     onStart: () => {
       const mode = h.mode()
@@ -686,21 +699,37 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       // Standing down mid-thought throws the thought away with it. Otherwise
       // held text would surface as the opening of the *next* conversation.
       if (mode === 'wake') assemble.cancel()
+      closeStream()
       // The barge-in. In guard mode the user has started talking over him, and
       // because the guard threshold is high this is a real interruption rather
       // than leaked playback — so cut him off now, do not wait for the words.
       // Energy alone can be JARVIS's own playback. Wait for an explicit
       // named interruption in the transcription before cancelling a reply.
     },
-    onEnd: (blob) => {
-      if (stopped) return
+    // Same rule as a finished segment: it stays here until it is addressed to
+    // him. Words said before his name wait, and go only if the name comes.
+    onSegment: (samples, rate) => {
+      if (!window.jarvisDesktop || useWorkspace.getState().settings.voiceIdentityRequired || Date.now() < streamRetryAt) return
       if (['guard', 'deaf'].includes(h.mode())) return
-      if (!segmentMaySend({ localWake: Boolean(localWake), heldText: Boolean(assemble.held()), addressedAtStart, addressedUntil, now: Date.now() })) {
+      unsent.push(samples)
+      if (!mayLeave()) return
+      stream ??= openLiveStt()
+      for (const chunk of unsent) stream.feed(chunk, rate)
+      unsent = []
+    },
+    onDiscard: closeStream,
+    onEnd: (blob) => {
+      const streaming = stream
+      stream = null
+      unsent = []
+      if (stopped || ['guard', 'deaf'].includes(h.mode())) { streaming?.abort(); return }
+      if (!mayLeave()) {
         drop('sem a palavra de ativação; nada foi enviado')
+        streaming?.abort()
         return
       }
-      if (pendingAudio.length >= 2) { pendingAudio.length = 0; generation++; return }
-      pendingAudio.push({ blob, generation, at: Date.now(), addressed: addressedAtStart })
+      if (pendingAudio.length >= 2) { streaming?.abort(); pendingAudio.length = 0; generation++; return }
+      pendingAudio.push({ blob, generation, at: Date.now(), addressed: addressedAtStart, streamed: streaming?.finish() ?? null })
       void drain()
     },
     onAudio: (samples, rate) => localWake?.feed(samples, rate),
@@ -756,7 +785,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
   const guardPoll = setInterval(() => {
     const mode = h.mode()
     vad?.setGuard(mode === 'guard' || mode === 'deaf')
-    if (mode !== previousMode && (mode === 'guard' || mode === 'deaf')) { generation++; addressedUntil = 0; pendingAudio.length = 0; assemble.cancel() }
+    if (mode !== previousMode && (mode === 'guard' || mode === 'deaf')) { generation++; addressedUntil = 0; pendingAudio.length = 0; assemble.cancel(); closeStream() }
     previousMode = mode
     // He has stood down — by Escape, by the idle timeout, or by dropping back
     // to the wake word. Anything half-said belonged to a conversation that is
@@ -774,6 +803,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       stopped = true
       captureAbort.abort()
       pendingAudio.length = 0
+      closeStream()
       clearInterval(guardPoll)
       assemble.cancel()
       vad?.stop()

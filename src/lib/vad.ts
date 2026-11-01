@@ -2,7 +2,7 @@ import { getMic } from './audio'
 import { SpeechGate } from './speechGate'
 import { useWorkspace } from '../workspace'
 
-export type VadHandlers = { onStart: () => void; onEnd: (audio: Blob, ms: number) => void; onLevel: (value: number) => void; onError: (message: string) => void; onAudio?: (samples: Float32Array, rate: number) => void }
+export type VadHandlers = { onStart: () => void; onEnd: (audio: Blob, ms: number) => void; onLevel: (value: number) => void; onError: (message: string) => void; onAudio?: (samples: Float32Array, rate: number) => void; onSegment?: (samples: Float32Array, rate: number) => void; onDiscard?: () => void }
 export type Vad = { stop: () => void; setGuard: (on: boolean) => void; live: () => boolean; meter: () => { energy: number; floor: number; threshold: number; speaking: boolean } }
 
 // Batch PCM in the audio thread. Unlike RAF/MediaRecorder, this preserves the
@@ -78,14 +78,16 @@ export async function startVad(h: VadHandlers): Promise<Vad> {
       if (!wasSpeaking) {
         ring.push(samples)
         while (ring.length > Math.ceil(ctx.sampleRate * 0.65 / 2048)) ring.shift()
-        if (event === 'start') { recorded = ring.slice(); ring = []; duration = recorded.reduce((sum, chunk) => sum + chunk.length / ctx.sampleRate * 1000, 0); h.onStart() }
+        if (event === 'start') { recorded = ring.slice(); ring = []; duration = recorded.reduce((sum, chunk) => sum + chunk.length / ctx.sampleRate * 1000, 0); h.onStart(); for (const chunk of recorded) h.onSegment?.(chunk, ctx.sampleRate) }
         return
       }
       recorded.push(samples); duration += ms
+      h.onSegment?.(samples, ctx.sampleRate)
       if (event === 'end' || event === 'discard') {
         const chunks = recorded; const elapsed = duration
         reset()
         if (event === 'end') h.onEnd(pcmWave(chunks, ctx.sampleRate), elapsed)
+        else h.onDiscard?.()
       }
     }
     await Promise.race([ready, new Promise<void>((resolve) => setTimeout(resolve, 1200))])

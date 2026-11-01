@@ -26,6 +26,15 @@ export function pcmToWav(raw, rate = 24000) {
 /** Older voice models say pcm, newer ones audio/l16; it is the same audio. */
 const PCM = /pcm|l16/i
 const speechModel = () => process.env.JARVIS_TTS_MODEL || 'gemini-3.1-flash-tts-preview'
+/** The daily quota is per model, so a spent one need not cost the voice. */
+const SPARE_SPEECH_MODEL = 'gemini-3.8-flash-tts'
+async function withSpeechModel(request) {
+  try { return await request(speechModel()) } catch (error) {
+    if (error.status !== 429 || speechModel() === SPARE_SPEECH_MODEL) throw error
+    console.warn(`[jarvis] voz: cota de ${speechModel()} esgotada; usando ${SPARE_SPEECH_MODEL}`)
+    return request(SPARE_SPEECH_MODEL)
+  }
+}
 const speechPrompt = (text) => `Leia apenas o texto a seguir em português do Brasil, com fala direta, fluida e natural. Use ritmo de conversa ligeiramente acelerado, articulando com clareza. Conecte as frases e use pausas muito curtas, somente onde a pontuação for necessária à compreensão. Não fale pausadamente, não faça pausas dramáticas nem alongue palavras. Não acrescente palavras nem leia esta orientação.\n\n${text}`
 
 /** A WAV header for audio of unknown length, which players read until the end. */
@@ -56,17 +65,18 @@ export async function handleSpeechStream(req, res, cors, ai) {
   const controller = new AbortController()
   res.on('close', () => { if (!res.writableEnded) controller.abort() })
   let started = false
+  const begun = Date.now()
   try {
     if (!process.env.GEMINI_API_KEY && !ai) { res.writeHead(503, cors); return res.end('Voz neural não configurada.') }
     const query = new URL(req.url, 'http://localhost').searchParams
     const text = query.get('text')?.trim() ?? ''
     if (!text || text.length > 4000) { res.writeHead(400, cors); return res.end('Texto inválido.') }
     const client = ai ?? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-    const stream = await client.models.generateContentStream({
-      model: speechModel(), contents: speechPrompt(text),
+    const stream = await withSpeechModel((model) => client.models.generateContentStream({
+      model, contents: speechPrompt(text),
       config: { responseModalities: ['AUDIO'], abortSignal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: selectGeminiVoice(query.get('voice')) } } } },
-    })
+    }))
     // Chunks can split a 16-bit sample, and a stray byte turns the rest to noise.
     let carry = Buffer.alloc(0)
     for await (const chunk of stream) {
@@ -75,6 +85,7 @@ export async function handleSpeechStream(req, res, cors, ai) {
       if (!PCM.test(audio.mimeType || '')) throw new Error('Formato de áudio inesperado.')
       if (!started) {
         started = true
+        console.log(`[jarvis] voz: primeiro áudio em ${Date.now() - begun} ms`)
         res.writeHead(200, { ...cors, 'content-type': 'audio/wav', 'cache-control': 'no-store', 'accept-ranges': 'none' })
         res.write(streamingWavHeader(Number(/rate=(\d+)/.exec(audio.mimeType)?.[1] || 24000)))
       }
@@ -109,12 +120,12 @@ export async function handleSpeech(req, res, cors) {
     if (!text || text.length > 4000) { res.writeHead(400, cors); return res.end('Texto inválido.') }
     const voice = selectGeminiVoice(request.voice)
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-    const response = await ai.models.generateContent({
-      model: speechModel(),
+    const response = await withSpeechModel((model) => ai.models.generateContent({
+      model,
       contents: speechPrompt(text),
       config: { responseModalities: ['AUDIO'], abortSignal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
-    })
+    }))
     const audio = response.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData
     if (!audio?.data || !PCM.test(audio.mimeType || '')) throw new Error('Sem áudio.')
     const rate = Number(/rate=(\d+)/.exec(audio.mimeType)?.[1] || 24000)

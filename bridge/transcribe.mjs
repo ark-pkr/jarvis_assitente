@@ -2,6 +2,9 @@ import { GoogleGenAI } from '@google/genai'
 const TRANSCRIPTION_TIMEOUT_MS = 45000
 const SPECIALIZED_ASR_TIMEOUT_MS = 12000
 let specializedUnavailableUntil = 0
+export const CUSTOM_VOCABULARY = ['Jarvis', 'Microsoft Word', 'Excel', 'PowerPoint', 'Visual Studio Code', 'VS Code', 'Python', 'JavaScript', 'TypeScript', 'SQL', 'PDF', 'GitHub']
+/** Transcribers label what is not speech, and a label is not something said. */
+export const isNoise = (text) => /^(?:\[.*\]|\(.*\)|sil[eê]ncio|ru[ií]do|m[uú]sica|\.\.\.)[.!]?$/i.test(text)
 
 function withAbort(promise, signal) {
   if (signal.aborted) return Promise.reject(signal.reason)
@@ -28,11 +31,11 @@ export async function transcribeAudioDetailed(bytes, mimeType, { apiKey = proces
       const result = await withAbort(ai.interactions.create({
         model: process.env.JARVIS_ASR_MODEL || 'gemini-3.5-transcribe',
         input: [{ type: 'audio', data: bytes.toString('base64'), mime_type: mimeType.split(';')[0] }],
-        generation_config: { transcription_config: { language_codes: ['pt-BR'], custom_vocabulary: ['Jarvis', 'Microsoft Word', 'Excel', 'PowerPoint', 'Visual Studio Code', 'VS Code', 'Python', 'JavaScript', 'TypeScript', 'SQL', 'PDF', 'GitHub'] } },
+        generation_config: { transcription_config: { language_codes: ['pt-BR'], custom_vocabulary: CUSTOM_VOCABULARY } },
         store: false,
       }, { signal: requestSignal }), requestSignal)
       const text = typeof result.output_text === 'string' ? result.output_text.trim() : ''
-      if (/^(?:\[.*\]|\(.*\)|sil[eê]ncio|ru[ií]do|m[uú]sica|\.\.\.)[.!]?$/i.test(text)) return { text: '' }
+      if (isNoise(text)) return { text: '' }
       if (text) {
         const bounded = text.slice(0, 12000)
         if ((bounded.match(/\[trecho incerto\]/gi) ?? []).length === 1) return { text: '', clarification: bounded }

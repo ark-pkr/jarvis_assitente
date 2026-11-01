@@ -167,6 +167,23 @@ const BY_TOOL: Rule[] = [
 const pickers = BY_TOOL.map((r) => ({ ...r, pick: makePicker(r.lines) }))
 
 /**
+ * What can be told from the request alone. The tool line above only comes once
+ * the model has picked a tool, a second or more in, and for these the answer is
+ * still seconds away. Only requests that are slow by nature: a line ahead of an
+ * answer that was about to arrive anyway would only be in its way.
+ */
+const SLOW_REQUESTS = [
+  { words: /\bclima\b|previsao do tempo|\bchov|\bchuva\b|temperatura|quantos graus/, pick: makePicker(['Vendo a previsão.', 'Consultando o clima.']) },
+  { words: /\bpesquis|\bprocur|\bnoticias?\b|\bcotacao\b|\bpreco d/, pick: makePicker(['Pesquisando.']) },
+  { words: /minha tela|\bna tela\b|\b(?:olhe|olha|veja|ve) a tela\b/, pick: makePicker(['Olhando sua tela.']) },
+]
+
+export function forRequest(said: string): string | null {
+  const plain = said.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+  return SLOW_REQUESTS.find((request) => request.words.test(plain))?.pick() ?? null
+}
+
+/**
  * `mcp__<server>__<tool>`, split on the first separator so tool names keep
  * their own underscores (`browser_click`, `text_to_speech`). A built-in like
  * WebSearch or Bash has no server half.

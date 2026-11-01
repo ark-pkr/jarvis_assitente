@@ -22,6 +22,7 @@ import { geminiQuery } from './gemini.mjs'
 import { memoryServer } from './memory.mjs'
 import { personalRecords } from './turn-context.mjs'
 import { projectServer } from './projects.mjs'
+import { LIVE_TRANSCRIPTION_PATH, serveLiveTranscription } from './live-transcribe.mjs'
 import { handleSpeech, handleSpeechStream } from './speech.mjs'
 import { desktopServer } from './desktop.mjs'
 import { wordServer } from './word.mjs'
@@ -250,7 +251,7 @@ const wss = new WebSocketServer({
   verifyClient: ({ origin, req }, done) => {
     if (!desktopAuthorized(req)) return done(false, 401, 'Unauthorized')
     const path = (req.url ?? '/').split('?')[0]
-    if (path !== '/' && path !== '/ws') {
+    if (path !== '/' && path !== '/ws' && path !== LIVE_TRANSCRIPTION_PATH) {
       console.warn(`[jarvis] rejected websocket on path ${path}`)
       return done(false, 403, 'Forbidden')
     }
@@ -314,7 +315,8 @@ const RESULT_FAILURES = {
   default: 'O pedido terminou sem resposta.',
 }
 
-wss.on('connection', (socket) => {
+wss.on('connection', (socket, req) => {
+  if (req.url?.split('?')[0] === LIVE_TRANSCRIPTION_PATH) return serveLiveTranscription(socket)
   console.log('[jarvis] client connected')
 
   // Answer the HUD straight away rather than making it wait for the agent's

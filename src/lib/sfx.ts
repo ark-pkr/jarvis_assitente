@@ -13,7 +13,7 @@
  * this file is only the fallback for when that file isn't there.
  */
 
-type Cue = 'boot' | 'wake' | 'listen' | 'tool' | 'done' | 'error'
+type Cue = 'boot' | 'wake' | 'listen' | 'heard' | 'tool' | 'done' | 'error'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -79,7 +79,7 @@ export async function unlockAudio(): Promise<void> {
 
 /** Pick up any real audio files the user has dropped into public/audio/. */
 async function loadOverrides() {
-  const cues: Cue[] = ['boot', 'wake', 'listen', 'tool', 'done', 'error']
+  const cues: Cue[] = ['boot', 'wake', 'listen', 'heard', 'tool', 'done', 'error']
   await Promise.all(
     cues.map(async (cue) => {
       if (samples.has(cue)) return
@@ -182,6 +182,15 @@ const synth: Record<Cue, () => void> = {
 
   /** Listening: a single soft low pip so it doesn't fight the user's voice. */
   listen: () => blip(660, { dur: 0.1, gain: 0.14 }),
+
+  /**
+   * Understood: the seconds before an answer feel far shorter once you know you
+   * were heard. Played as the sound effects duck, so it starts louder than listen.
+   */
+  heard: () => {
+    blip(880, { dur: 0.07, gain: 0.24 })
+    blip(1175, { at: 0.06, dur: 0.11, gain: 0.22 })
+  },
 
   /** A tool fired — a tiny mechanical tick. */
   tool: () => {

@@ -61,6 +61,29 @@ test('loud audio clips instead of wrapping around', () => {
   assert.equal(out.readInt16LE(2), -32768)
 })
 
+test('a spent daily quota moves to the spare model instead of losing the voice', async () => {
+  const res = responseStub()
+  const asked = []
+  const good = streaming(audioChunk([0, 16]))
+  const ai = { models: { generateContentStream: async (request) => {
+    asked.push(request.model)
+    if (asked.length === 1) throw Object.assign(new Error('x'), { status: 429 })
+    return good.models.generateContentStream(request)
+  } } }
+  await handleSpeechStream({ url: '/voice/stream?text=Oi' }, res, {}, ai)
+  assert.equal(res.status, 200)
+  assert.equal(asked.length, 2)
+  assert.notEqual(asked[0], asked[1])
+})
+
+test('any other failure does not spend a second model', async () => {
+  const res = responseStub()
+  let calls = 0
+  await handleSpeechStream({ url: '/voice/stream?text=Oi' }, res, {}, { models: { generateContentStream: async () => { calls++; throw Object.assign(new Error('x'), { status: 500 }) } } })
+  assert.equal(calls, 1)
+  assert.equal(res.status, 502)
+})
+
 test('a failure before the first audio is an error the speaker can fall back from', async () => {
   const res = responseStub()
   const failing = { models: { generateContentStream: async () => { throw Object.assign(new Error('x'), { status: 429 }) } } }

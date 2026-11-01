@@ -15,7 +15,7 @@ import * as music from './lib/music'
 import * as hands from './lib/hands'
 import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
-import { forTool, attention } from './lib/fillers'
+import { forRequest, forTool, attention } from './lib/fillers'
 import { chooseResponsePace, isArticleRequest } from './lib/responsePace'
 import { mergeClarification, splitUnclearTranscript } from './lib/clarification'
 import {
@@ -208,6 +208,7 @@ export default function App() {
 
     const spk = createSpeaker()
     speaker.current = spk
+    if (voiceInput) sfx.play('heard')
     sfx.duck(true)
     music.duck(true)
 
@@ -218,6 +219,12 @@ export default function App() {
     let acknowledgement: ReturnType<typeof setTimeout> | null = null
 
     try {
+      const early = voiceInput && pace.fast ? forRequest(said) : null
+      if (early) {
+        filled = true
+        store.getState().setCaption(early)
+        spk.sayFast(early)
+      }
       if (voiceInput) acknowledgement = setTimeout(() => {
         if (stale() || started || filled) return
         filled = true
