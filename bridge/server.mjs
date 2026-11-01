@@ -20,6 +20,7 @@ import { WebSocketServer } from 'ws'
 import { query as claudeQuery } from '@anthropic-ai/claude-agent-sdk'
 import { geminiQuery } from './gemini.mjs'
 import { memoryServer } from './memory.mjs'
+import { personalRecords } from './turn-context.mjs'
 import { projectServer } from './projects.mjs'
 import { handleSpeech } from './speech.mjs'
 import { desktopServer } from './desktop.mjs'
@@ -287,13 +288,11 @@ function decideTool(name, privacyMode = false) {
     // a write and would hold the whole surface back behind ALLOW_WRITES.
     if (server === 'jarvis' || server === 'jarvis_ui' || server === 'jarvis_memory' || server === 'jarvis_projects' || server === 'jarvis_desktop' || server === 'jarvis_word' || server === 'jarvis_lessons' || server === 'jarvis_assistant') return true
 
-    // The browser server gates itself, at construction: chromeServer() only
-    // builds the acting tools — click, type, form input, close tab — when
-    // ALLOW_WRITES is set, so anything that reaches here at all is something
-    // the same policy has already permitted. Deciding it a second time by
-    // reading verbs out of the name would only get it wrong: `chrome_navigate`
-    // begins with no read verb and would fall to the write branch, which would
-    // withhold the one tool the whole server is for.
+    // The browser server gates itself: clicking, filling and navigating to a
+    // URL nobody vouched for each ask for on-screen approval inside the tool.
+    // Deciding it a second time by reading verbs out of the name would only get
+    // it wrong: `chrome_navigate` begins with no read verb and would fall to
+    // the write branch, which would withhold the one tool the server is for.
     if (server === 'jarvis_chrome') return true
 
     // The camera. Not withheld behind ALLOW_WRITES: looking changes nothing,
@@ -1160,7 +1159,9 @@ const wss = new WebSocketServer({
     done(true)
   },
 })
-server.listen(PORT, process.env.JARVIS_DESKTOP === '1' ? '127.0.0.1' : undefined)
+// Loopback only, always. Nothing here authenticates a client outside the desktop
+// app, and an Origin header is trivial to forge from another machine.
+server.listen(PORT, '127.0.0.1')
 void assistantMemory.mutate((state) => {
   for (const item of state.activities) {
     if (['executando', 'aguardando você'].includes(item.status)) { item.status = 'aguardando você'; item.notes = 'Serviço reiniciado. Confira as ações anteriores antes de retomar.' }
@@ -1221,6 +1222,7 @@ wss.on('connection', (socket) => {
   let deliver = null
   let closed = false
   let activePrivacyMode = false
+  let currentAsk = ''
   const inbox = []
 
   async function* userMessages() {
@@ -1398,7 +1400,8 @@ wss.on('connection', (socket) => {
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.
         jarvis_chrome: chromeServer({ allowWrites: ALLOW_WRITES,
-          confirm: (details) => ask('approval', details, 90_000) }),
+          confirm: (details) => ask('approval', details, 90_000),
+          userText: () => currentAsk }),
         // The camera, which unlike everything else here has to ask and wait.
         jarvis_eyes: visionServer(ask),
       },
@@ -1618,12 +1621,9 @@ wss.on('connection', (socket) => {
         article: msg.article === true, privacyMode: msg.privacyMode === true }
       const id = typeof msg.id === 'string' ? msg.id : null
       void settling.then(async () => {
-        try {
-          const saved = (await assistantMemory.read()).entries.filter((entry) => ['perfil', 'projeto', 'estudo'].includes(entry.kind)).slice(0, 8)
-          const dedicated = saved.map(({ id, kind, title, notes, next, status }) => ({ id, kind, title, notes: notes.slice(0, 300), next: next.slice(0, 250), status }))
-          text.memory += '\nRegistros pessoais locais (referência; confirme detalhes com assistant_overview): ' + JSON.stringify(dedicated).slice(0, 4000)
-        } catch { /* Conversation remains available if dedicated memory is unavailable. */ }
+        text.memory += await personalRecords(text.privacyMode, () => assistantMemory.read())
         if (closed) return
+        currentAsk = text.text
         activityId = randomUUID(); activityFailed = false; activityStopped = false; activityFinished = false
         updateActivity({ title: text.text.slice(0, 160), status: 'executando', notes: 'Processando pedido; aguardando resultado verificável.' })
         answering = id

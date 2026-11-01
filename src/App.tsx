@@ -15,8 +15,6 @@ import * as music from './lib/music'
 import * as hands from './lib/hands'
 import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
-import * as kokoro from './lib/kokoro'
-import { TTS_ENGINE } from './config'
 import { forTool, attention } from './lib/fillers'
 import { chooseResponsePace, isArticleRequest } from './lib/responsePace'
 import { mergeClarification, splitUnclearTranscript } from './lib/clarification'
@@ -92,7 +90,6 @@ export default function App() {
   const turn = useRef(0)
   const booting = useRef(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const voicePoll = useRef<ReturnType<typeof setInterval> | null>(null)
   const pendingClarification = useRef<{ before: string; after: string } | null>(null)
   const clarificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -600,24 +597,6 @@ export default function App() {
       )
     }
 
-    // Pull the neural voice down during the boot sequence so the first
-    // "Hey Jarvis" isn't waiting on an 86MB download. Deliberately not awaited
-    // — if it's slow, JARVIS comes up on the system voice and swaps over the
-    // moment the model is ready.
-    if (TTS_ENGINE === 'kokoro') {
-      void kokoro.load()
-      voicePoll.current = setInterval(() => {
-        const p = kokoro.loadProgress()
-        if (kokoro.isReady() || kokoro.isUnavailable()) {
-          store.getState().setBootNote('')
-          if (voicePoll.current) clearInterval(voicePoll.current)
-          voicePoll.current = null
-        } else if (p > 0 && p < 1) {
-          store.getState().setBootNote(`voice ${Math.round(p * 100)}%`)
-        }
-      }, 200)
-    }
-
     // Long enough for the four-beat start-up sequence in Boot.tsx to play —
     // status bar, rings, suit schematic, reactor power-up — before the live
     // interface takes over. Kept a touch under the boot cue so the music is
@@ -813,7 +792,6 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
       clearIdle()
       clearClarification()
-      if (voicePoll.current) clearInterval(voicePoll.current)
       voice.current?.stop()
       speaker.current?.cancel()
       // The camera must not outlive the page that turned it on.

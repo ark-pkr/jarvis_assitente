@@ -5,6 +5,7 @@ import { uiServer } from './ui.mjs'
 import { displayServer } from './panels.mjs'
 import { visionServer } from './vision.mjs'
 import { chromeServer } from './browser.mjs'
+import { personalRecords } from './turn-context.mjs'
 
 async function* messages(...texts) {
   for (const content of texts) yield { message: { content } }
@@ -178,18 +179,32 @@ test('article mode asks for research, sources, a readable blade and detailed rea
     assert.match(request.config.systemInstruction, /ferramenta blade/)
     return chunks({ text: 'Artigo pronto.' })
   })
-
-  test('privacy mode is passed to the assistant as a restriction on personal context and remote research', async () => {
-    const ai = fakeAI((request) => {
-      assert.match(request.config.systemInstruction, /Modo privacidade/)
-      assert.match(request.config.systemInstruction, /não pesquise na web/)
-      return chunks({ text: 'Sem memória nem pesquisa.' })
-    })
-    async function* input() { yield { message: { content: 'Responda sem pesquisar', fast: true, privacyMode: true, memory: 'Modo privacidade ativo' } } }
-    const session = geminiQuery({ prompt: input(), options: { ...defaults, model: 'gemini-3.5-flash' } }, { ai })
-    for await (const event of session) if (event.type === 'result') assert.equal(event.subtype, 'success')
-  })
   async function* input() { yield { message: { content: 'Escreva um artigo sobre energia solar', fast: false, article: true } } }
   const session = geminiQuery({ prompt: input(), options: { ...defaults, model: 'gemini-3.5-flash' } }, { ai })
   for await (const event of session) if (event.type === 'result') assert.equal(event.subtype, 'success')
+})
+
+test('privacy mode sends neither memory nor history to the model', async () => {
+  const ai = fakeAI((request) => {
+    assert.match(request.config.systemInstruction, /Modo privacidade/)
+    assert.match(request.config.systemInstruction, /não pesquise na web/)
+    assert.doesNotMatch(request.config.systemInstruction, /Registros pessoais/)
+    assert.equal(request.contents.length, 1)
+    return chunks({ text: 'Sem memória nem pesquisa.' })
+  })
+  async function* input() {
+    yield { message: { content: 'Responda', fast: true, privacyMode: true, memory: 'Registros pessoais: segredo',
+      context: [{ role: 'user', text: 'Conversa anterior' }] } }
+  }
+  const session = geminiQuery({ prompt: input(), options: { ...defaults, model: 'gemini-3.5-flash' } }, { ai })
+  for await (const event of session) if (event.type === 'result') assert.equal(event.subtype, 'success')
+})
+
+test('personal records never join a private turn, and are never read for one', async () => {
+  let reads = 0
+  const read = async () => { reads++; return { entries: [{ id: '1', kind: 'perfil', title: 'Nome', notes: 'segredo', next: '', status: '' }] } }
+  assert.equal(await personalRecords(true, read), '')
+  assert.equal(reads, 0)
+  assert.match(await personalRecords(false, read), /segredo/)
+  assert.equal(await personalRecords(false, async () => { throw new Error('indisponível') }), '')
 })

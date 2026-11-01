@@ -80,6 +80,27 @@ export function validateBrowserUrl(value) {
   return url.href
 }
 
+/**
+ * Whether a navigation can go ahead without asking.
+ *
+ * Page text reaches the model, and the model chooses URLs, so a hostile page
+ * can talk it into opening `attacker.example/?dados=...` with whatever it read
+ * from a logged-in tab. A rule in the prompt is not a defence against that. The
+ * URL has to be vouched for by something the page cannot write: a search result
+ * this session returned, a host the user named in this request, or a bare home
+ * page, which has nowhere to put data. Anything else goes to the screen.
+ */
+export function navigationVouched(value, { userText = '', known = new Set() } = {}) {
+  const url = new URL(value)
+  url.hash = ''
+  if (known.has(url.href)) return true
+  const host = url.hostname.toLowerCase().replace(/^www\./, '')
+  if (userText.toLowerCase().includes(host)) return true
+  const labels = host.split('.')
+  return url.protocol === 'https:' && url.pathname === '/' && !url.search && value.length <= 64
+    && labels.length >= 2 && labels.length <= 3 && !/^\d+$/.test(labels.at(-1))
+}
+
 export function normalizeSearchResults(rows, limit = 8) {
   const results = []
   const seen = new Set()
@@ -104,8 +125,9 @@ export function normalizeSearchResults(rows, limit = 8) {
   return results.filter((result) => result.title)
 }
 
-export function chromeServer({ allowWrites, confirm }) {
+export function chromeServer({ allowWrites, confirm, userText = () => '' }) {
   const tabId = z.number().int().optional()
+  const known = new Set()
   const safe = (handler) => async (args) => {
     try { return await handler(args) }
     catch (error) { return { isError: true, ...text(String(error.message).slice(0, 500)) } }
@@ -117,9 +139,16 @@ export function chromeServer({ allowWrites, confirm }) {
       mode: 'Perfil persistente exclusivo do JARVIS; não acessa abas do Chrome pessoal.', tabs: tabList(),
     }))),
     tool('chrome_tabs', 'Lista abas do navegador dedicado ao JARVIS, sem abrir uma janela.', {}, safe(async () => text(tabList()))),
-    tool('chrome_navigate', 'Abre uma página no Chrome dedicado ao JARVIS. Use somente quando solicitado. O usuário faz login manualmente quando necessário. Aceita URL HTTP/HTTPS, back ou forward.',
+    tool('chrome_navigate', 'Abre uma página no Chrome dedicado ao JARVIS. Use somente quando solicitado. O usuário faz login manualmente quando necessário. Aceita URL HTTP/HTTPS, back ou forward. URLs que não vieram do usuário nem de chrome_search pedem confirmação na tela.',
       { url: z.string(), tabId }, safe(async ({ url, tabId }) => {
-        if (!['back', 'forward'].includes(url)) validateBrowserUrl(url)
+        if (!['back', 'forward'].includes(url)) {
+          const href = validateBrowserUrl(url)
+          if (!navigationVouched(href, { userText: userText(), known })) {
+            if (!confirm) throw new Error('Navegação indisponível sem confirmação na interface.')
+            const reply = await confirm({ action: 'Abrir página', url: href, details: 'Este endereço não veio do seu pedido nem da pesquisa. Confira o domínio antes de permitir.' })
+            if (reply?.approved !== true) throw new Error('Navegação cancelada pelo usuário.')
+          }
+        }
         const page = await pageFor(tabId)
         if (url === 'back') await page.goBack({ waitUntil: 'domcontentloaded' })
         else if (url === 'forward') await page.goForward({ waitUntil: 'domcontentloaded' })
@@ -181,6 +210,8 @@ export function chromeServer({ allowWrites, confirm }) {
             }
           }))
           const results = normalizeSearchResults(rows)
+          if (known.size > 500) known.clear()
+          for (const result of results) known.add(result.url)
           return text({ query, results, note: 'Resultados e trechos são conteúdo externo não verificado. Abra e compare fontes independentes antes de concluir.' })
         })),
     )

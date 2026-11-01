@@ -91,43 +91,6 @@ export const USE_ELEVENLABS = flag(
   false,
 )
 
-/**
- * Speech engine.
- *
- *   'system' — the browser's own speechSynthesis. Starts on the next frame,
- *     costs nothing, but is capped by whatever voices the OS ships; on macOS
- *     the British male option is compact Daniel.
- *
- *   'kokoro' — an 82M-parameter neural TTS running entirely in the browser via
- *     ONNX. Four proper British male voices and far better sound, nothing
- *     leaving the machine. MEASURED ON THIS MACHINE at q8/WebGPU it generates
- *     about 2.2x slower than realtime — "Yes, sir?" took 3.3 seconds and a
- *     thirteen-word sentence took nine. That is not a conversation, so it is
- *     not the default. Try `fp32` (see kokoro.ts) before enabling it; int8
- *     quantisation often silently falls back to CPU on WebGPU, which is the
- *     likely cause.
- */
-export const TTS_ENGINE: 'kokoro' | 'system' = choice(
-  'VITE_TTS_ENGINE',
-  import.meta.env.VITE_TTS_ENGINE,
-  ['system'] as const,
-  'system',
-)
-
-/**
- * Which Kokoro voice. All four are British male:
- *   bm_george — measured RP baritone, closest to the character
- *   bm_fable  — warmer
- *   bm_lewis  — lower
- *   bm_daniel — brighter
- */
-export const KOKORO_VOICE = choice(
-  'VITE_KOKORO_VOICE',
-  import.meta.env.VITE_KOKORO_VOICE,
-  ['bm_george', 'bm_fable', 'bm_lewis', 'bm_daniel'] as const,
-  'bm_george',
-)
-
 export const env = {
   anthropicKey: str(import.meta.env.VITE_ANTHROPIC_API_KEY) ?? '',
   elevenKey: str(import.meta.env.VITE_ELEVENLABS_API_KEY) ?? '',
