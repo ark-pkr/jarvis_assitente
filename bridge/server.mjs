@@ -110,7 +110,7 @@ function originAllowed(origin) {
 const PROVIDER = process.env.JARVIS_PROVIDER?.trim() || 'gemini'
 if (!['gemini', 'claude'].includes(PROVIDER)) throw new Error('JARVIS_PROVIDER must be gemini or claude')
 if (PROVIDER === 'gemini' && !process.env.GEMINI_API_KEY?.trim() && process.env.JARVIS_DESKTOP !== '1') {
-  console.error('[jarvis] Configure GEMINI_API_KEY in .env.local. See README-GEMINI.md.')
+  console.error('[jarvis] Configure GEMINI_API_KEY in .env.local. See README.md.')
   process.exit(1)
 }
 const query = PROVIDER === 'gemini' ? geminiQuery : claudeQuery
