@@ -28,7 +28,6 @@ Requisitos opcionais: Chrome para navegar e pesquisar, Word e VS Code para as in
 | **V** | Alterna a voz |
 | **T** | Testa o som |
 | **D** | Abre o painel de diagnóstico |
-| **G** | Liga ou desliga a câmera e o controle por gestos |
 | **Ctrl+Alt+J** | Chama o JARVIS de dentro de qualquer programa (troque em **Aplicativo**) |
 
 Ao iniciar, ele cumprimenta; uma vez por dia, o cumprimento traz lembretes, tarefas, o próximo passo e o clima, se houver cidade na **Central**. A abertura completa só toca na primeira vez, e **Áudio** tem a opção de repeti-la sempre.
@@ -75,11 +74,38 @@ docker pull rust:1.87-slim
 
 **Aplicativos.** Abre VS Code, Word, Excel e outros, sempre com confirmação. Você pode cadastrar outro `.exe` em **Computador**. Não aceita terminais, instaladores nem argumentos livres, e abrir um aplicativo não dá controle sobre a janela dele.
 
-**Assistente diário.** Em **Central**, registre perfil, projetos, estudos, diário, tarefas, lembretes e rotinas. Diga “onde eu parei?” ou “começar meu dia”. Lembretes vencidos aparecem quando o serviço volta, mas não há calendário externo, recorrência nem despertar do computador. Lembretes por contexto comparam o aplicativo em primeiro plano; vêm desligados e não enviam o título da janela à internet.
+**Assistente diário.** Em **Central**, registre perfil, projetos, estudos, diário, tarefas, lembretes e rotinas. Diga “onde eu parei?” ou “começar meu dia”. Lembretes vencidos aparecem quando o serviço volta, mas o computador não é despertado. Lembretes por contexto comparam o aplicativo em primeiro plano; vêm desligados e não enviam o título da janela à internet.
 
 **Biblioteca.** Busca texto nas pastas autorizadas com referência de página ou linha. Cada busca dura até 12 segundos, com limite de 30 arquivos, três níveis e dez páginas por PDF.
 
-**Gestos.** Pressione **G** para ligar a câmera e controlar os painéis com as mãos. O guia aparece na tela. O modelo de rastreamento é baixado do Google na primeira vez.
+$1
+$1
+**Memória que aprende.** Ele guarda fatos que você conta sobre si e um resumo de cada conversa, em um arquivo neste computador. Lê só o que você disse, nunca páginas ou arquivos, e ignora senhas e documentos. Em **Histórico e ajustes → Memória** você vê, apaga ou desliga tudo. O que ele aprende é contexto e nunca autoriza uma ação. No modo privacidade, nada é lido nem guardado.
+
+**Busca nos seus arquivos.** Diga “indexa a pasta de estudos” e, depois, pergunte “onde falei sobre juros?”. Ele acha o trecho pelo significado e cita o arquivo e a página. O índice fica neste computador, mas o texto dos arquivos vai ao Google para gerá-lo, por isso cada pasta pede confirmação. Use só nas pastas autorizadas.
+
+**Prova de inteligência.** `npm run test:intelligence -- nome` mede as respostas em uma lista de pedidos reais, com dados temporários, e compara com a última medição. Acrescente seus pedidos em `scripts/eval-cases.mjs`. Cada rodada consome a cota do Gemini.
+
+**Lembretes e timer.** Na hora marcada aparece a notificação do Windows e ele fala em voz alta, assim que terminar o que estiver dizendo. Lembretes de mais de dez minutos atrás ficam só na notificação. Podem se repetir: “me lembra toda segunda às sete”. “Foco de 25 minutos” mostra a contagem na tela e começa a pausa sozinho. O JARVIS precisa estar aberto.
+
+**Prova oral.** Diga “me testa em banco de dados”. Ele procura o assunto nas pastas indexadas, ou no arquivo que você indicar, e faz uma pergunta por vez. Responda falando; “não sei” mostra a resposta, e “chega” encerra. O que você errar volta depois de um dia, depois três, depois uma semana. As perguntas e a correção são feitas pelo Gemini, a partir do trecho do material enviado a ele.
+
+**Modo aula.** Diga “modo aula” e confirme. A sala é ouvida pelo microfone e o JARVIS fica calado. Diga “Jarvis, encerrar aula” ou use o botão no topo da tela, e ele entrega resumo, datas de prova, destaques e tarefas. As aulas ficam em **Aprender**, e “me testa na última aula” faz uma prova sobre ela. A cada minuto o áudio vai ao Google para virar texto; o áudio não é salvo e o texto fica neste computador. Grave só com autorização de quem estiver falando. Sem a chave Picovoice, ele não ouve o próprio nome durante a aula: use o botão ou a tecla de atalho.
+
+**Pesquisa em segundo plano.** Diga “pesquisa os melhores notebooks até 4 mil e me avisa”. Você continua conversando, e ele avisa em voz alta quando terminar. Peça “qual foi o resultado?”. Só faz buscas: não compra, não envia e não altera nada. Fechar o JARVIS interrompe a pesquisa.
+
+**Personalidade.** Formal, equilibrado, bem-humorado ou sarcástico, em **Áudio** ou dizendo “fica mais formal”.
+
+**Conversa natural.** Ele fala como no dia a dia, escolhe quando você pede uma opinião e ajusta o tom da voz neural ao momento. Quando você conta algo com data, como “tenho prova na sexta”, ele guarda e pergunta como foi depois. Essa lista fica em **Memória**, e nada de saúde, luto ou dinheiro entra nela. Ele também pode puxar assunto, no máximo uma vez por dia, entre 9h e 21h. Em **Áudio**, a opção **Interromper só falando** dispensa o nome para cortá-lo; use com fone, porque em caixa de som a própria voz dele pode se interromper.
+
+**Google Agenda.** Para conectar uma vez:
+
+1. No [Google Cloud Console](https://console.cloud.google.com/), crie um projeto e ative a **Google Calendar API**.
+2. Em **Tela de consentimento**, configure o app como **Externo** e adicione o seu e-mail como usuário de teste.
+3. Em **Credenciais**, crie um **ID do cliente OAuth** do tipo **App para computador**.
+4. Em **Histórico e ajustes → Aplicativo**, cole o ID e a chave e clique em **Conectar a Google Agenda**.
+
+Depois disso, diga “o que tenho amanhã?” ou “marca dentista sexta às 15h”. Ler não pede confirmação; criar, alterar e excluir pedem. Com o app em modo de teste, o Google pode pedir para conectar de novo depois de sete dias.
 
 **Voz.** Escolha entre Charon, Orus, Kore e Puck em **Áudio**, com velocidade até 1,8×. Ajuste a pausa de captura se o fim das frases for cortado. A proteção de voz opcional usa uma chave pessoal do [Picovoice](https://console.picovoice.ai/) e roda localmente, mas não substitui autenticação de segurança.
 
@@ -97,12 +123,14 @@ docker pull rust:1.87-slim
 - **Navegador:** o JARVIS usa um Chrome com perfil próprio, que não acessa suas abas pessoais. Senhas são digitadas por você. Clicar e preencher sempre pedem confirmação. Abrir uma URL que não veio do seu pedido nem da pesquisa também pede, para que uma página não induza o envio de dados a outro site.
 - **Risco conhecido:** imagens e vídeos em painéis são buscados pelo serviço local sem confirmação. Uma página maliciosa poderia induzir a IA a exibir uma imagem cujo endereço carrega dados. Tenha cautela ao pesquisar em sites desconhecidos com páginas logadas abertas.
 - **Dados locais:** ficam em `%APPDATA%\JARVIS`. Desinstalar não remove esses dados, seus documentos nem seus projetos.
+- **Backup:** uma cópia automática por semana, e outra quando você pedir em **Memória**, vai para `Documentos\JARVIS Backups`. O arquivo não tem senha e contém conversas, memória e aulas; não contém chaves nem logins. Projetos gerados e o perfil do Chrome ficam de fora. Se Documentos sincroniza com a nuvem, as cópias vão junto.
 
 ## Problemas comuns
 
 - **Não ouve você:** pressione **D** e confira “transcription failures” e “error”. Verifique a entrada em **Áudio → Microfone de entrada** e **Configurações do Windows → Privacidade e segurança → Microfone**.
 - **Limite de uso:** a presença da chave não garante cota. Falhas reais aparecem ao enviar um pedido.
-- **Logs:** ficam em `%APPDATA%\JARVIS\desktop.log`.
+- **Voz muda de repente:** a cota de voz neural acabou. Frases curtas já faladas continuam com a voz neural, e o resto usa a voz do Windows até a cota voltar.
+- **Logs:** ficam em `%APPDATA%\JARVIS\desktop.log`. Para relatar um problema, use **Conexões → Copiar diagnóstico**.
 - **Consumo:** cada turno grava tokens e tempos, sem conteúdo, em `%APPDATA%\JARVIS\dados\metrics.jsonl`.
 
 ## Desenvolvimento

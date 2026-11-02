@@ -3,12 +3,21 @@ import { useWorkspace, flushWorkspace } from '../workspace'
 import { useStore } from '../store'
 import { watchApproval, type Approval } from '../lib/bridge'
 import { ConnectionStatus } from './ConnectionStatus'
+import { LearnedPanel } from './LearnedPanel'
 import { LearningPanel, FilesPanel, ComputerPanel } from './LearningPanel'
 import { AudioCheck } from './AudioCheck'
 import { AssistantPanel, AssistantAlerts } from './AssistantPanel'
 import { DesktopSettings } from './DesktopSettings'
 import { MicrophoneSettings } from './MicrophoneSettings'
 import { VoiceIdentitySettings } from './VoiceIdentitySettings'
+import { BackupPanel } from './BackupPanel'
+import { DiagnosticButton } from './DiagnosticButton'
+import { automaticBackup } from '../lib/backup'
+
+/** Longer than any click, and short enough not to annoy anyone who means it. */
+const HOLD_TO_APPROVE_MS = 800
+/** Long enough for the opening to finish before a file gets written. */
+const BACKUP_AFTER_MS = 30000
 
 export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, onTestVoice }: { onStop: () => void; onPauseVoice: () => void; onResumeVoice: () => void; onRepeat: (text: string) => void; onTestVoice: () => void }) {
   const workspace = useWorkspace()
@@ -20,6 +29,14 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
   const [memory, setMemory] = useState(workspace.memory)
   const [savedNote, setSavedNote] = useState('')
   const approveButton = useRef<HTMLButtonElement>(null)
+  // The window jumps to the front to ask, and a click meant for whatever was there
+  // must not land on Authorize.
+  const [armed, setArmed] = useState(false)
+  // The card comes up over whatever the person was doing, so a click on its way to
+  // another program can land here at any moment. A click alone never authorizes.
+  const [holding, setHolding] = useState(false)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const letGo = () => { clearTimeout(holdTimer.current); setHolding(false) }
   useEffect(() => watchApproval((next) => {
     setApproval(next)
     // A question nobody can see is a turn that hangs until it times out.
@@ -27,8 +44,15 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
     else void window.jarvisDesktop?.releaseAttention()
   }), [])
   useEffect(() => { const show = (event: Event) => { setTab((event as CustomEvent<string>).detail || 'Histórico'); setOpen(true) }; window.addEventListener('jarvis:settings', show); return () => window.removeEventListener('jarvis:settings', show) }, [])
-  useEffect(() => { if (approval) approveButton.current?.focus() }, [approval])
+  useEffect(() => {
+    if (!approval) return
+    approveButton.current?.focus()
+    setArmed(false)
+    const timer = setTimeout(() => setArmed(true), 1200)
+    return () => { clearTimeout(timer); clearTimeout(holdTimer.current); setHolding(false) }
+  }, [approval])
   useEffect(() => { setMemory(workspace.memory) }, [workspace.memory])
+  useEffect(() => { const timer = setTimeout(automaticBackup, BACKUP_AFTER_MS); return () => clearTimeout(timer) }, [])
   const active = workspace.sessions.find((session) => session.id === workspace.active)
   const ready = phase !== 'offline' && phase !== 'boot'
   const stop = () => { onStop(); flushWorkspace() }
@@ -71,6 +95,7 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         </article>)}</div>
       </>}
       {tab === 'Memória' && <>
+        <LearnedPanel />
         <h3>Preferências que o JARVIS deve lembrar</h3>
         <p>Escreva como prefere ser atendido. Estas notas e as últimas 40 mensagens da conversa selecionada acompanham seus pedidos ao Gemini.</p>
         <textarea aria-label="Preferências e memória" rows={8} maxLength={6000} value={memory} onChange={(event) => { setMemory(event.target.value); setSavedNote('') }} placeholder="Ex.: Prefiro respostas curtas. Trabalho com manutenção elétrica." />
@@ -81,10 +106,19 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <button className="danger" onClick={() => {
           if (window.confirm('Apagar todas as conversas e a memória salvas neste navegador?')) { stop(); workspace.clear(); setMemory('') }
         }}>Apagar histórico e memória</button>
+        <BackupPanel onBeforeRestore={stop} />
       </>}
       {tab === 'Áudio' && <>
         <MicrophoneSettings />
         <VoiceIdentitySettings onPauseVoice={onPauseVoice} onResumeVoice={onResumeVoice} />
+        <h3>Personalidade</h3>
+        <label>Como ele fala
+          <select aria-label="Personalidade" value={workspace.settings.personality} onChange={(event) => workspace.setSettings({ personality: event.target.value as typeof workspace.settings.personality })}>
+            <option value="formal">Formal · sóbrio, sem piadas</option><option value="equilibrado">Equilibrado · direto e cordial</option><option value="bem-humorado">Bem-humorado · leve</option><option value="sarcastico">Sarcástico · mordomo inglês</option>
+          </select></label>
+        <p>Vale a partir da próxima resposta. Você também pode pedir por voz. O humor nunca aparece em erros, confirmações ou más notícias.</p>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.bargeIn} onChange={(event) => workspace.setSettings({ bargeIn: event.target.checked })} />Interromper só falando, sem dizer o nome</label>
+        <p>Use com fone. Em caixa de som, a própria voz dele pode se interromper. Nada sai do computador até ele parar de falar e passar a ouvir você.</p>
         <h3>Voz e desempenho</h3>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.greeting} onChange={(event) => workspace.setSettings({ greeting: event.target.checked })} />Cumprimentar ao iniciar, com lembretes, tarefas e próximo passo</label>
         <p>O resumo completo é falado uma vez por dia; nas outras aberturas, só o cumprimento. Com a voz neural, esse texto passa pela API Gemini. Se houver cidade na Central, inclui o clima, que vem do Open-Meteo.</p>
@@ -124,7 +158,7 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.fast} onChange={(event) => workspace.setSettings({ fast: event.target.checked })} />Preferir respostas rápidas para perguntas simples</label>
         <p>O JARVIS escolhe mais análise para pesquisas, comparações e pedidos complexos. Você também pode dizer “resposta rápida” ou “investigue melhor”.</p>
       </>}
-      {tab === 'Conexões' && <><h3>Estado dos serviços</h3><ConnectionStatus detailed /><p>O Chrome dedicado abre na primeira navegação. Faça login manualmente nessa janela. As ações de clique e preenchimento precisam de confirmação.</p></>}
+      {tab === 'Conexões' && <><h3>Estado dos serviços</h3><ConnectionStatus detailed /><p>O Chrome dedicado abre na primeira navegação. Faça login manualmente nessa janela. As ações de clique e preenchimento precisam de confirmação.</p><DiagnosticButton /></>}
     </aside>}
     {approval && <div className="approval-backdrop" onKeyDown={(event) => {
       if (event.key === 'Escape') { event.stopPropagation(); approval.decide(false) }
@@ -138,8 +172,12 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
       <h2 id="approval-title">Confirmar ação do JARVIS</h2>
       <p><b>{approval.action}</b></p><p className="approval-details">{approval.details}</p>
       <p className="approval-url">Página: {approval.url}</p>
-      <p>Confira o destino e o conteúdo. O JARVIS só executará esta ação uma vez após sua confirmação.</p>
-      <div><button ref={approveButton} onClick={() => approval.decide(false)}>Cancelar</button><button onClick={() => approval.decide(true)}>Autorizar esta ação</button></div>
+      <p>Confira o destino e o conteúdo. Diga <b>“sim”</b> para autorizar ou <b>“não”</b> para cancelar, ou segure o botão. O JARVIS só executará esta ação uma vez após sua confirmação.</p>
+      <div><button ref={approveButton} onClick={() => approval.decide(false)}>Cancelar</button><button className="hold-to-approve" data-holding={holding} aria-label="Autorizar esta ação" disabled={!armed}
+        onPointerDown={() => { setHolding(true); holdTimer.current = setTimeout(() => approval.decide(true), HOLD_TO_APPROVE_MS) }}
+        onPointerUp={letGo} onPointerLeave={letGo} onPointerCancel={letGo}
+        // Detail 0 is the keyboard, which had to Tab here on purpose: focus starts on Cancel.
+        onClick={(event) => { if (event.detail === 0) approval.decide(true) }}>{holding ? 'Continue segurando…' : 'Segure para autorizar'}</button></div>
     </section></div>}
   </>
 }

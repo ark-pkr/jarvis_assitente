@@ -1,5 +1,93 @@
 # Histórico de versões
 
+## 1.8.0
+
+**Seus dados protegidos**
+- Backup de conversas, memória, aprendizados, lembretes, aulas, provas e ajustes em **Memória**, com uma cópia automática por semana em `Documentos\JARVIS Backups`. As cinco últimas automáticas são mantidas.
+- Restaurar salva antes uma cópia do estado atual e recusa arquivos danificados. Chaves e logins não entram no backup.
+
+**Voz**
+- Frases curtas que ele já falou são guardadas e repetidas sem gastar cota, mesmo sem internet.
+- Sem nenhuma cota, ele vai direto para a voz do Windows, sem esperar a recusa do Google a cada frase.
+- Se a voz neural não começar em 10 segundos, a voz do Windows assume.
+
+**Suporte**
+- **Copiar diagnóstico**, em **Conexões**: versão, estado da voz e últimos erros, sem chaves, e-mails ou conversas.
+
+## 1.7.0
+
+**Mais humano**
+- Fala do dia a dia: respostas mais curtas, reações como “Boa!” e “Eita”, e nada de “Certamente” ou “Posso ajudar em algo mais?”. A personalidade formal continua como mordomo.
+- Opinião própria: pedindo para escolher, ele escolhe uma opção e diz o motivo e o principal problema dela.
+- Voz com emoção: animada com boas notícias, acolhedora com as ruins, calma quando você está estressado e baixa de madrugada.
+- Cumprimento que muda: nota quando você some por dias e quando ainda está de pé de madrugada.
+- Retoma o que você contou: “tenho prova na sexta” vira “E aí, como foi a prova?” depois do dia. Veja e apague em **Memória**.
+- Puxa assunto: no máximo uma vez por dia, entre 9h e 21h, quando você estiver por perto. Desligue em **Memória** ou dizendo “para de puxar assunto”.
+- Interromper só falando, sem dizer o nome: opção em **Áudio**, desligada por padrão, para usar com fone.
+
+**Segurança**
+- Autorizar agora exige segurar o botão por quase um segundo. Um clique solto, mesmo sem querer, não autoriza nada. A confirmação por voz continua igual.
+
+**Correções**
+- Quando a cota da voz principal acabava, cada frase demorava cerca de 20 segundos. A voz reserva agora responde em cerca de 1 segundo e também muda de tom.
+- A rota de voz sem streaming falhava com a voz reserva.
+
+## 1.6.0
+
+**Estudos**
+- Prova oral: “me testa em banco de dados” faz uma pergunta por vez a partir dos seus arquivos ou de uma aula, corrige a resposta falada e traz de volta depois o que você errou.
+- Modo aula: “modo aula” ouve em silêncio e, ao dizer “encerrar aula”, entrega resumo, datas de prova, destaques do professor e tarefas. O áudio não fica salvo.
+- Timer: “foco de 25 minutos” conta na tela, avisa em voz alta e começa a pausa sozinho.
+- Lembretes que se repetem: todo dia, dias úteis, toda semana ou todo mês.
+
+**Assistente**
+- Pesquisa em segundo plano: “pesquisa isso e me avisa” libera a conversa e ele avisa quando terminar. Só pesquisa, nunca compra, envia ou altera nada.
+- Personalidade: formal, equilibrado, bem-humorado ou sarcástico, em **Áudio** ou por voz. O humor nunca aparece em erros, confirmações ou más notícias.
+
+**Visual**
+- O buraco negro agora tem emoções: azul e lento no foco, violeta na aula, ciano na prova, verde num acerto e vermelho num alerta.
+
+**Correção**
+- Ferramentas citadas pelo nome nas instruções podiam falhar com “ferramenta indisponível”.
+
+## 1.5.0
+
+**Mais inteligente**
+- Aprende sozinho com as conversas: nome, estudos, projetos e preferências, sempre a partir do que você disse. Veja, corrija e apague em **Memória**.
+- Retoma assuntos: guarda um resumo de cada conversa, e “o que decidimos ontem?” funciona.
+- Aprende com correções, inclusive nomes que a transcrição errava.
+- Busca por significado nos seus arquivos: indexe uma pasta e “onde falei sobre juros?” encontra “taxa de rendimento”, citando arquivo e página.
+- Agenda proativa: o cumprimento traz os compromissos do dia e avisa quando dois batem no horário, e ele fala 15 minutos antes de cada um.
+- “Resume isso”: pode entender “isso” pelo programa aberto. Desligado por padrão.
+- Contas, lógica e análises vão para um modelo mais forte. Levam alguns segundos a mais e erram menos.
+- Depois de uma ação, ele só afirma o que o resultado comprova, e não insiste depois de um “não”.
+- Prova de inteligência: `npm run test:intelligence` mede a qualidade das respostas.
+
+## 1.4.7
+
+**Assistente**
+- Pesquisa rápida: placar, preço, cotação e notícia do dia em poucas frases, com a busca do Google, sem abrir o navegador.
+- Google Agenda: consultar, criar, alterar e excluir eventos por voz. Mudanças pedem confirmação. A conexão fica em **Aplicativo**.
+- Lembretes falados: na hora marcada ele fala em voz alta, sem interromper uma resposta.
+
+**Voz**
+- Uma frase que não toca na voz principal agora vai para a voz do sistema, em vez de ficar muda.
+- Depois do nome, “chega”, “tá bom”, “já entendi” e “obrigado” também interrompem.
+- O botão **Autorizar** só responde 1,2 segundo depois que o cartão aparece, para um clique que já ia acontecer não autorizar nada.
+
+**Visual**
+- Céu novo atrás do buraco negro: nebulosa discreta e mais estrelas, curvadas pela gravidade.
+- Painéis de vidro: o disco aparece desfocado por trás, com reflexo da sua luz.
+
+## 1.4.6
+
+**Confirmação por voz**
+- Antes de uma ação sensível, o JARVIS lê o que vai fazer e pergunta se pode seguir. Responda “sim” ou “não”; o cartão com os detalhes e os botões continua na tela.
+- “Não” sempre vence, e uma frase longa com “sim” no meio não autoriza nada.
+
+**Removido**
+- Controle por gestos: tecla G, mão na tela e o rastreamento pela câmera. A câmera continua disponível para o JARVIS olhar quando você pedir.
+
 ## 1.4.4
 
 **Visual**

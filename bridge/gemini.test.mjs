@@ -22,6 +22,25 @@ async function* chunks(...parts) {
 const defaults = { model: 'test', systemPrompt: 'JARVIS', maxTurns: 3,
   canUseTool: async () => ({ behavior: 'allow' }) }
 
+test('a tool called by the name the prompt uses still runs, and a refused one stays refused', async () => {
+  for (const [allowed, wanted] of [[true, false], [false, true]]) {
+    const seen = []
+    let calls = 0
+    const ai = fakeAI((request) => {
+      if (++calls === 1) return chunks({ functionCall: { name: 'ui_reset', args: {} } })
+      seen.push(request.contents.at(-1).parts[0].functionResponse.response.isError)
+      return chunks({ text: 'Pronto.' })
+    })
+    const effects = []
+    const session = geminiQuery({ prompt: messages('Volte ao normal'), options: { ...defaults,
+      canUseTool: async () => ({ behavior: allowed ? 'allow' : 'deny' }),
+      mcpServers: { jarvis_ui: uiServer((op) => effects.push(op)) } } }, { ai })
+    for await (const _ of session) { /* drained */ }
+    assert.deepEqual(seen, [wanted])
+    assert.equal(effects.length, allowed ? 1 : 0)
+  }
+})
+
 test('connects actual internal MCP servers, runs UI tool, preserves signature and history', async () => {
   const effects = []
   let calls = 0

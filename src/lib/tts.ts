@@ -30,6 +30,8 @@ import { useWorkspace } from '../workspace'
 type Speaker = {
   /** Feed streamed text in. Complete sentences are spoken as they appear. */
   push: (delta: string) => void
+  /** How what comes next should feel. Set by the model at the top of an answer. */
+  setTone: (tone: string) => void
   /** Speak a phrase ahead of anything still queued. Used for filler like
    *  "Working on it, sir" while a tool runs. */
   say: (text: string) => void
@@ -136,6 +138,9 @@ function setSpeaking(text: string) {
  * because the gap between two sentences is exactly when the echo of the first
  * one lands. See `isEcho` in voice.ts.
  */
+/** A sentence is playing now, without the tail still on its way back to the microphone. */
+export const speakingAloud = () => Boolean(speaking)
+
 export function speakingNow(): string {
   const tail = Date.now() < recentUntil ? recent : ''
   return `${speaking} ${tail}`.trim()
@@ -322,6 +327,8 @@ export function createSpeaker(): Speaker {
     for (const r of waiting) r()
   }
 
+  let tone = ''
+
   const enqueue = (sentence: string, priority = false, native = false) => {
     if (cancelled) return
     // Shape once here so both engines get the same text — stripped markdown,
@@ -348,7 +355,9 @@ export function createSpeaker(): Speaker {
       // Started here, one sentence ahead, so the next sentence is already
       // arriving when this one ends. The key is not a URL: the same sentence
       // can be queued twice, and each needs its own stream.
-      const url = `${BRIDGE_HTTP_URL}/voice/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(useWorkspace.getState().settings.neuralVoice)}`
+      const hour = new Date().getHours()
+      const mood = tone || (hour >= 23 || hour < 6 ? 'baixo' : '')
+      const url = `${BRIDGE_HTTP_URL}/voice/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(useWorkspace.getState().settings.neuralVoice)}${mood ? `&tone=${mood}` : ''}`
       const key = `stream:${++streams}`
       streaming.set(key, fetch(url, { signal: controller.signal }).catch(() => null))
       return Promise.resolve(key)
@@ -408,10 +417,8 @@ export function createSpeaker(): Speaker {
       // A failed generation is not a failed turn — drop to the system voice.
       if (url) {
         if (!streaming.has(url)) {
-          await playUrl(url, item.text)
-          return
-        }
-        if (await playStream(url, item.text) || cancelled) return
+          if (await playUrl(url, item.text) || cancelled) return
+        } else if (await playStream(url, item.text) || cancelled) return
         // The neural voice failed before any sound came out. Same answer, plainer
         // voice, and no asking it again for a minute.
         neuralRetryAt = Date.now() + 60000
@@ -686,8 +693,10 @@ export function createSpeaker(): Speaker {
       })
     })
 
+  /** True once sound came out. A sentence that never played still has to be said. */
   const playUrl = (url: string, text: string) =>
-    new Promise<void>((resolve) => {
+    new Promise<boolean>((resolve) => {
+      let played = false
       const audio = new Audio(url)
       audio.volume = useWorkspace.getState().settings.voiceVolume
       audio.playbackRate = useWorkspace.getState().settings.voiceRate
@@ -736,13 +745,14 @@ export function createSpeaker(): Speaker {
         outLevel = 0.12
         URL.revokeObjectURL(url)
         if (currentAudio === audio) currentAudio = null
-        resolve()
+        resolve(played)
       }
       activeFinish = finish
       // Sound is genuinely coming out. This is the cloud/neural counterpart of
       // SpeechSynthesisUtterance.onstart, and it is what makes the diagnostics
       // verdict — and the T self-test — tell the truth on the premium path.
       audio.onplaying = () => {
+        played = true
         diag.started++
         diag.lastError = ''
       }
@@ -767,6 +777,9 @@ export function createSpeaker(): Speaker {
     })
 
   return {
+    setTone(value) {
+      tone = value
+    },
     say(text) {
       enqueue(text, true)
     },

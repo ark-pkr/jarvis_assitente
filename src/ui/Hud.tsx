@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useStore, accentFor, type Phase } from '../store'
+import { useStore, accentFor, feelingNow, type Phase } from '../store'
+import { feelingColour, hexColour } from '../scene/sphereMood'
+import { StudyChips } from './StudyChips'
 import { Suggestions } from './Suggestions'
 import { BladeSweep, Blades } from './Blades'
 import { Effects } from './Effects'
-import { Pointer } from './Pointer'
-import { GestureGuide } from './GestureGuide'
 import { useWorkspace } from '../workspace'
 
 const statusText: Record<Phase, string> = {
@@ -165,7 +165,6 @@ export function Hud() {
   const error = useStore((s) => s.error)
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
-  const gestures = useStore((s) => s.gestures)
   const looking = useStore((s) => s.looking)
   const caption = useStore((s) => s.caption)
   const ui = useStore((s) => s.ui)
@@ -173,7 +172,9 @@ export function Hud() {
   // accentFor folds JARVIS's overrides in over the phase colour, so one
   // variable on the root carries a theme change into every .hud-* rule without
   // a single component knowing a theme exists.
-  const colour = accentFor(phase, ui)
+  const feeling = useStore(feelingNow)
+  const shade = feelingColour(phase, feeling)
+  const colour = accentFor(phase, ui, shade && hexColour(shade))
 
   useEffect(() => {
     // The ground has to be set on the document, not painted here: the HUD sits
@@ -305,7 +306,7 @@ export function Hud() {
 
       {phase !== 'offline' && <footer className="hud-bottom">
         <span className="hint">
-          conversa por voz · <kbd>Esc</kbd> colocar em espera · <kbd>Espaço</kbd> ativar · <kbd>G</kbd> gestos
+          conversa por voz · <kbd>Esc</kbd> colocar em espera · <kbd>Espaço</kbd> ativar
           {voice && (
             <>
               {' · '}
@@ -320,15 +321,9 @@ export function Hud() {
           instant it finishes. */}
       <Effects />
 
-      {/* Above even the effects: the reticle shows where a press will land, and
-          a press that lands under a flourish is a press you cannot aim. */}
-      {gestures && <Pointer />}
-      {(gestures || looking) && (
-        <div className="hands-live">
-          {looking ? `OBSERVANDO — ${looking.toUpperCase()}` : 'CÂMERA LIGADA · G PARA DESLIGAR'}
-        </div>
-      )}
-      <GestureGuide live={gestures} />
+      <StudyChips />
+
+      {looking && <div className="camera-live">OBSERVANDO — {looking.toUpperCase()}</div>}
     </div>
   )
 }

@@ -9,7 +9,11 @@ const origin = process.argv.find((arg) => arg.startsWith('--jarvis-origin='))?.s
 if (origin && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) contextBridge.exposeInMainWorld('jarvisDesktop', Object.freeze({
   bridgeUrl: origin.replace(/^http/, 'ws'),
   settings: () => ipcRenderer.invoke('jarvis:settings'),
+  copyText: (text) => ipcRenderer.invoke('jarvis:copy-text', text),
   saveSettings: (values) => ipcRenderer.invoke('jarvis:save-settings', values),
+  connectCalendar: (values) => ipcRenderer.invoke('jarvis:calendar-connect', values),
+  disconnectCalendar: () => ipcRenderer.invoke('jarvis:calendar-disconnect'),
+  activeWindow: () => ipcRenderer.invoke('jarvis:active-window'),
   openExternal: (url) => ipcRenderer.invoke('jarvis:open-external', url),
   voiceIdentityStatus: () => ipcRenderer.invoke('jarvis:voice-identity-status'),
   voiceIdentityMaterial: () => ipcRenderer.invoke('jarvis:voice-identity-material'),

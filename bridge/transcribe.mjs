@@ -1,9 +1,13 @@
+import { learned } from './learned.mjs'
 import { GoogleGenAI } from '@google/genai'
 const TRANSCRIPTION_TIMEOUT_MS = 45000
 const SPECIALIZED_ASR_TIMEOUT_MS = 12000
 let specializedUnavailableUntil = 0
-export const CUSTOM_VOCABULARY = ['Jarvis', 'Microsoft Word', 'Excel', 'PowerPoint', 'Visual Studio Code', 'VS Code', 'Python', 'JavaScript', 'TypeScript', 'SQL', 'PDF', 'GitHub']
+const CUSTOM_VOCABULARY = ['Jarvis', 'Microsoft Word', 'Excel', 'PowerPoint', 'Visual Studio Code', 'VS Code', 'Python', 'JavaScript', 'TypeScript', 'SQL', 'PDF', 'GitHub']
 /** Transcribers label what is not speech, and a label is not something said. */
+/** Names he has been corrected on, which no general vocabulary would know. */
+export const vocabulary = () => [...CUSTOM_VOCABULARY, ...learned.words]
+
 export const isNoise = (text) => /^(?:\[.*\]|\(.*\)|sil[eê]ncio|ru[ií]do|m[uú]sica|\.\.\.)[.!]?$/i.test(text)
 
 function withAbort(promise, signal) {
@@ -16,7 +20,8 @@ function withAbort(promise, signal) {
   return Promise.race([promise, aborted]).finally(() => signal.removeEventListener('abort', onAbort))
 }
 
-export async function transcribeAudioDetailed(bytes, mimeType, { apiKey = process.env.GEMINI_API_KEY, signal, client } = {}) {
+/** `lenient` is for a long recording: a word in doubt beats a hole, and a minute takes longer. */
+export async function transcribeAudioDetailed(bytes, mimeType, { apiKey = process.env.GEMINI_API_KEY, signal, client, lenient = false, timeoutMs = SPECIALIZED_ASR_TIMEOUT_MS } = {}) {
   if (!apiKey && !client) throw new Error('Configure a chave Gemini nos ajustes do aplicativo.')
   if (!/^audio\/(webm|ogg|wav|mp4|mpeg)(?:;.*)?$/i.test(mimeType)) throw new Error('Formato de áudio não suportado.')
   if (bytes.length > 8 * 1024 * 1024) throw new Error('Trecho de áudio muito grande.')
@@ -26,19 +31,19 @@ export async function transcribeAudioDetailed(bytes, mimeType, { apiKey = proces
     try {
       const requestSignal = AbortSignal.any([
         ...(signal ? [signal] : []),
-        AbortSignal.timeout(SPECIALIZED_ASR_TIMEOUT_MS),
+        AbortSignal.timeout(timeoutMs),
       ])
       const result = await withAbort(ai.interactions.create({
         model: process.env.JARVIS_ASR_MODEL || 'gemini-3.5-transcribe',
         input: [{ type: 'audio', data: bytes.toString('base64'), mime_type: mimeType.split(';')[0] }],
-        generation_config: { transcription_config: { language_codes: ['pt-BR'], custom_vocabulary: CUSTOM_VOCABULARY } },
+        generation_config: { transcription_config: { language_codes: ['pt-BR'], custom_vocabulary: vocabulary() } },
         store: false,
       }, { signal: requestSignal }), requestSignal)
       const text = typeof result.output_text === 'string' ? result.output_text.trim() : ''
       if (isNoise(text)) return { text: '' }
       if (text) {
         const bounded = text.slice(0, 12000)
-        if ((bounded.match(/\[trecho incerto\]/gi) ?? []).length === 1) return { text: '', clarification: bounded }
+        if (!lenient && (bounded.match(/\[trecho incerto\]/gi) ?? []).length === 1) return { text: '', clarification: bounded }
         return { text: bounded }
       }
       return { text: '' }
@@ -60,6 +65,7 @@ export async function transcribeAudioDetailed(bytes, mimeType, { apiKey = proces
   try { result = JSON.parse(response.text || '') } catch { return { text: '' } }
   if (result.speech !== true || typeof result.text !== 'string') return { text: '' }
   const text = result.text.trim().slice(0, 12000)
+  if (lenient) return { text: text.replace(/\[trecho incerto\]/gi, '…') }
   const unclearSpans = text.match(/\[trecho incerto\]/gi) ?? []
   if (text.length <= 500 && unclearSpans.length === 1) {
     return { text: '', clarification: text }

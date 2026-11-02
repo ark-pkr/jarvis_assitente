@@ -1,6 +1,8 @@
 const { execFile } = require('node:child_process')
 
 const command = [
+  // Window titles carry accents, and the console's default code page would mangle them.
+  '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
   "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public static class JarvisForegroundWindow { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId); }'",
   '$handle = [JarvisForegroundWindow]::GetForegroundWindow()',
   'if ($handle -eq [IntPtr]::Zero) { exit 0 }',

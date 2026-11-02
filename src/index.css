@@ -574,10 +574,11 @@ kbd {
   padding: 14px 16px;
   background: linear-gradient(
     160deg,
-    color-mix(in srgb, var(--accent) 9%, transparent),
-    color-mix(in srgb, var(--accent) 3%, transparent)
+    color-mix(in srgb, var(--accent) 11%, rgba(4, 11, 18, 0.5)),
+    color-mix(in srgb, var(--accent) 4%, rgba(2, 7, 12, 0.6))
   );
-  backdrop-filter: blur(7px);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 14px 40px rgba(0, 0, 0, 0.4);
   transform-origin: top center;
   overflow: hidden;
 }
@@ -1742,7 +1743,7 @@ html[data-workspace-mode='assistente'] .boot {
 .blades-stack {
   position: fixed;
   inset: 0;
-  z-index: 6;
+  z-index: 9;
   display: grid;
   place-items: center;
   /* The container never eats clicks; only the cards inside it do, so the
@@ -1757,17 +1758,31 @@ html[data-workspace-mode='assistente'] .boot {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+  /* Dark glass: the disc glows through, dimmed and blurred enough to read over. */
   background: linear-gradient(
     160deg,
-    color-mix(in srgb, var(--accent) 11%, rgba(4, 12, 18, 0.94)),
-    color-mix(in srgb, var(--accent) 4%, rgba(2, 8, 12, 0.96))
+    color-mix(in srgb, var(--accent) 12%, rgba(5, 12, 20, 0.66)),
+    color-mix(in srgb, var(--accent) 4%, rgba(2, 7, 12, 0.76))
   );
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
-  backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(20px) saturate(1.5);
   box-shadow:
     0 24px 70px rgba(0, 0, 0, 0.62),
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
     0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent) inset;
   transform-origin: center center;
+}
+/* What the glass catches: a sheen from above and the warm disc from below. Over the
+   content rather than behind it, as a reflection is, and too faint to cost legibility. */
+.bl::after,
+.panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.075), transparent 30%),
+    radial-gradient(120% 60% at 50% 112%, rgba(255, 164, 82, 0.1), transparent 70%);
 }
 
 /* Only the front blade gets the accent glow; the ones behind read as paper. */
@@ -1775,6 +1790,7 @@ html[data-workspace-mode='assistente'] .boot {
   box-shadow:
     0 26px 80px rgba(0, 0, 0, 0.7),
     0 0 34px -10px color-mix(in srgb, var(--accent) 46%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
     0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent) inset;
 }
 
@@ -1952,23 +1968,9 @@ html[data-workspace-mode='assistente'] .boot {
 /* A resized blade is sized inline, so the presets must not fight it. */
 .bl[style*="width"] { max-width: none; max-height: none }
 
-/* ------------------------------------------------------------------- hands */
-/*
-   The hand overlay. Above everything, because it shows where a press will land
-   and must never be occluded by the thing it is about to press. pointer-events
-   is none throughout — this is a picture of a pointer, not a pointer; the real
-   events are synthesised and dispatched at whatever is underneath (hands.ts).
-*/
-.hands-canvas {
-  position: fixed;
-  inset: 0;
-  z-index: 95;
-  pointer-events: none;
-}
-
-/* The camera indicator. Deliberately always visible while tracking runs: an
+/* The camera indicator. Deliberately always visible while he looks: an
    interface that can see the room has to say so without being asked. */
-.hands-live {
+.camera-live {
   position: fixed;
   top: 14px;
   left: 50%;
@@ -1986,75 +1988,22 @@ html[data-workspace-mode='assistente'] .boot {
   backdrop-filter: blur(8px);
   pointer-events: none;
 }
-.hands-live::before {
+.camera-live::before {
   content: '';
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: #ff4d4d;
   box-shadow: 0 0 8px #ff4d4d;
-  animation: handsPulse 1.6s ease-in-out infinite;
+  animation: cameraPulse 1.6s ease-in-out infinite;
 }
-@keyframes handsPulse {
+@keyframes cameraPulse {
   0%, 100% { opacity: 1 }
   50%      { opacity: 0.35 }
 }
 
-/* The legend. Bottom-left, out of the way of both the reactor and the blade
-   stack, and gone once you have proved you know how it works. */
-.gguide {
-  position: fixed;
-  left: 22px;
-  bottom: 22px;
-  z-index: 96;
-  min-width: 210px;
-  padding: 11px 13px 9px;
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
-  background: color-mix(in srgb, var(--accent) 8%, rgba(2, 8, 12, 0.86));
-  backdrop-filter: blur(10px);
-  pointer-events: none;
-  text-transform: none;
-  letter-spacing: normal;
-}
-.gguide-head {
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 0.6;
-  margin-bottom: 8px;
-}
-.gguide-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 3px 0;
-  font-size: 11px;
-}
-.gguide-icon { width: 17px; font-size: 13px; line-height: 1; filter: saturate(0.2) }
-.gguide-name {
-  width: 44px;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 95%, white);
-}
-.gguide-does { opacity: 0.68; font-size: 11px }
-.gguide-foot {
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  opacity: 0.45;
-}
-.gguide-foot kbd {
-  font: inherit;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  padding: 0 3px;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .hands-live::before { animation: none }
+  .camera-live::before { animation: none }
 }
 
 /* Spun in CSS, deliberately. Under framer this was an infinitely repeating
@@ -2087,6 +2036,14 @@ html[data-workspace-mode='assistente'] .boot {
 .assistant-entry { margin: 14px 0; padding: 14px; border: 1px solid #23616b; border-radius: 10px; overflow-wrap: anywhere; }
 .assistant-entry small { display: block; margin-top: 6px; color: #9dbfc5; }
 .assistant-entry p { white-space: pre-wrap; }
+.approval-card .hold-to-approve { position: relative; overflow: hidden; touch-action: none; user-select: none; }
+.approval-card .hold-to-approve::before { content: ''; position: absolute; inset: 0; background: #e3b46555; transform: scaleX(0); transform-origin: left; transition: transform 120ms; pointer-events: none; }
+.approval-card .hold-to-approve[data-holding='true']::before { transform: scaleX(1); transition: transform 800ms linear; }
+.study-chips { position: fixed; z-index: 96; top: 46px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: auto; max-width: calc(100vw - 32px); }
+.study-chip { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; font-size: 11px; letter-spacing: .08em; color: color-mix(in srgb, var(--accent) 80%, white); background: color-mix(in srgb, var(--bg, #000) 70%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; backdrop-filter: blur(8px); white-space: nowrap; }
+.study-chip b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.study-chip button { padding: 2px 8px; font: inherit; color: inherit; background: none; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 999px; cursor: pointer; }
+.study-chip.recording::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 8px #ff4d4d; animation: cameraPulse 1.6s ease-in-out infinite; }
 .assistant-alerts { position: fixed; z-index: 150; top: 80px; left: 20px; max-width: min(420px, calc(100vw - 40px)); background: #071e29; border: 1px solid #36d7b7; border-radius: 10px; padding: 14px; color: #d8f7ef; }
 .assistant-alerts div { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
 .approval-overlay { position: fixed; inset: 0; z-index: 220; display: grid; place-items: center; background: #000b; padding: 20px; }

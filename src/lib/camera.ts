@@ -1,8 +1,7 @@
 /**
  * The camera, and everything that looks through it.
  *
- * One stream, shared. Hand tracking wants it, the camera blade wants it, and
- * looking at something wants it — and a second getUserMedia makes Chrome drop
+ * One stream, shared. The camera blade wants it and looking at something wants it — and a second getUserMedia makes Chrome drop
  * the first, so anything that opens its own would silently blind the others.
  * Everything here goes through one refcounted handle.
  *
@@ -22,8 +21,8 @@
  * camera is open and is dropped the moment it closes.
  */
 
-/** Frames per second kept in the rolling buffer. Enough to catch a gesture,
- *  cheap enough to run alongside hand tracking. */
+/** Frames per second kept in the rolling buffer. Enough to catch a movement,
+ *  cheap enough to leave running. */
 const BUFFER_FPS = 6
 /** How much past to keep. Long enough for "what did I just do", short enough
  *  that the memory cost is a few megabytes rather than a few hundred. */
@@ -121,11 +120,10 @@ function drawTo(canvas: HTMLCanvasElement, w: number, h: number) {
   /**
    * Drawn unmirrored, deliberately.
    *
-   * The hand overlay mirrors its coordinates because a mirror is what a person
-   * expects to see of themselves. The raw frame is not mirrored, and for
-   * looking at something that is the correct choice: hold a label up to the
-   * camera and the raw frame reads it the right way round, while a mirrored
-   * one hands the model text backwards.
+   * The preview is mirrored because a mirror is what a person expects to see of
+   * themselves. The raw frame is not, and for looking at something that is the
+   * correct choice: hold a label up to the camera and the raw frame reads it the
+   * right way round, while a mirrored one hands the model text backwards.
    */
   ctx.drawImage(video, 0, 0, w, h)
   return ctx

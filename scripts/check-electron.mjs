@@ -51,7 +51,8 @@ try {
   await page.getByRole('button', { name: 'Abrir Calculadora', exact: true }).click()
   const approval = page.getByRole('dialog')
   await approval.waitFor({ timeout: 45000 })
-  await approval.getByRole('button', { name: 'Autorizar esta ação', exact: true }).click()
+  await page.waitForTimeout(1300)
+  await approval.getByRole('button', { name: 'Autorizar esta ação', exact: true }).press('Enter')
   await page.locator('.log-jarvis').filter({ hasText: /calculadora/i }).last().waitFor({ timeout: 45000 })
   console.log('Electron: comando de abertura da Calculadora passou pelo fluxo real de confirmação.')
 } finally { await application.close() }

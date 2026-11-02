@@ -2,8 +2,12 @@ import { getMic } from './audio'
 import { SpeechGate } from './speechGate'
 import { useWorkspace } from '../workspace'
 
-export type VadHandlers = { onStart: () => void; onEnd: (audio: Blob, ms: number) => void; onLevel: (value: number) => void; onError: (message: string) => void; onAudio?: (samples: Float32Array, rate: number) => void; onSegment?: (samples: Float32Array, rate: number) => void; onDiscard?: () => void }
+export type VadHandlers = { mayBarge?: () => boolean; onBarge?: () => void; onStart: () => void; onEnd: (audio: Blob, ms: number) => void; onLevel: (value: number) => void; onError: (message: string) => void; onAudio?: (samples: Float32Array, rate: number) => void; onSegment?: (samples: Float32Array, rate: number) => void; onDiscard?: () => void }
 export type Vad = { stop: () => void; setGuard: (on: boolean) => void; live: () => boolean; meter: () => { energy: number; floor: number; threshold: number; speaking: boolean } }
+
+const BARGE_ENERGY = .03
+const BARGE_HELD_MS = 320
+const BARGE_KEPT_MS = 900
 
 // Batch PCM in the audio thread. Unlike RAF/MediaRecorder, this preserves the
 // onset of quiet syllables and keeps separate utterances from sharing chunks.
@@ -48,6 +52,9 @@ export async function startVad(h: VadHandlers): Promise<Vad> {
   let source: MediaStreamAudioSourceNode | undefined; let capture: AudioWorkletNode | undefined
   let calibrated: () => void = () => {}
   const ready = new Promise<void>((resolve) => { calibrated = resolve })
+  /** What was said just before an interruption was sure, so its first words survive. */
+  let heard: Float32Array[] = []
+  let loudFor = 0
   const reset = () => { gate.reset(); duration = 0; recorded = []; ring = [] }
   const stop = () => { if (stopped) return; stopped = true; reset(); capture?.disconnect(); source?.disconnect(); void ctx.close() }
   try {
@@ -69,6 +76,27 @@ export async function startVad(h: VadHandlers): Promise<Vad> {
       let sum = 0; for (const sample of samples) sum += sample * sample
       energy = Math.sqrt(sum / samples.length)
       h.onLevel(Math.min(1, energy * 12))
+      if (guarded && h.mayBarge?.()) {
+        // Well above the room, and held, so a click or a cough does not stop him.
+        // Nothing leaves this machine until he has stopped and is listening.
+        const chunkMs = samples.length / ctx.sampleRate * 1000
+        loudFor = energy > Math.max(BARGE_ENERGY, gate.threshold * 4) ? loudFor + chunkMs : Math.max(0, loudFor - chunkMs)
+        heard.push(samples)
+        while (heard.length > Math.ceil(ctx.sampleRate * BARGE_KEPT_MS / 1000 / 2048)) heard.shift()
+        if (loudFor >= BARGE_HELD_MS) {
+          const opening = heard
+          heard = []; loudFor = 0; guarded = false; releaseAt = 0
+          reset()
+          gate.begin(BARGE_HELD_MS)
+          recorded = opening
+          duration = opening.reduce((sum, chunk) => sum + chunk.length / ctx.sampleRate * 1000, 0)
+          h.onBarge?.()
+          h.onStart()
+          for (const chunk of opening) h.onSegment?.(chunk, ctx.sampleRate)
+        }
+        return
+      }
+      heard = []; loudFor = 0
       if (guarded || performance.now() < releaseAt) { reset(); return }
       const ms = samples.length / ctx.sampleRate * 1000
       const wasSpeaking = gate.speaking

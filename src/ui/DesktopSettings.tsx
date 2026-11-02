@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useWorkspace } from '../workspace'
 export function DesktopSettings() {
   const [key, setKey] = useState('')
   const [model, setModel] = useState('gemini-3.5-flash')
@@ -15,7 +16,15 @@ export function DesktopSettings() {
   const [configured, setConfigured] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { void window.jarvisDesktop?.settings().then((settings) => { setConfigured(settings.configured); setModel(settings.model); setLogin(settings.startOnLogin); setContextReminders(settings.contextReminders); setAutoActivate(settings.autoActivate); setClapToStart(settings.clapToStart); setMiniOrb(settings.miniOrb); setHotkey(settings.hotkey); setHotkeyError(settings.hotkeyError); setLocalWake(settings.localWake); setWakeConfigured(settings.wakeConfigured) }).catch(() => setMessage('Não foi possível ler as configurações.')) }, [])
+  const workspace = useWorkspace()
+  const [calendar, setCalendar] = useState(false)
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
+  const linkCalendar = (work: Promise<void> | undefined, waiting: string) => {
+    setBusy(true); setMessage(waiting)
+    void work?.then(() => setMessage('Pronto. Reiniciando o serviço...')).catch((error: Error) => { setMessage(error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); setBusy(false) })
+  }
+  useEffect(() => { void window.jarvisDesktop?.settings().then((settings) => { setCalendar(settings.calendarConnected); setConfigured(settings.configured); setModel(settings.model); setLogin(settings.startOnLogin); setContextReminders(settings.contextReminders); setAutoActivate(settings.autoActivate); setClapToStart(settings.clapToStart); setMiniOrb(settings.miniOrb); setHotkey(settings.hotkey); setHotkeyError(settings.hotkeyError); setLocalWake(settings.localWake); setWakeConfigured(settings.wakeConfigured) }).catch(() => setMessage('Não foi possível ler as configurações.')) }, [])
   return <>
     <h3>Aplicativo para Windows</h3>
     <p>Gemini: {configured ? 'chave configurada' : 'configure sua chave para começar'}. A chave fica protegida pela sua conta do Windows e não aparece no instalador.</p>
@@ -33,6 +42,18 @@ export function DesktopSettings() {
     <label>Atalho global<input aria-label="Atalho global" value={hotkey} maxLength={40} onChange={(event) => setHotkey(event.target.value)} /></label>
     <p>Chama o JARVIS de dentro de qualquer programa. Exemplos: Control+Alt+J, Alt+Shift+J.</p>
     {hotkeyError && <p role="alert">{hotkeyError}</p>}
+    <label><input aria-label="Entender o isso" type="checkbox" checked={workspace.settings.windowContext} onChange={(event) => workspace.setSettings({ windowContext: event.target.checked })} />Entender “isso” pelo programa aberto</label>
+    <p>Em pedidos como “resume isso”, ele envia ao Gemini o nome do programa e o título da janela. Ver o conteúdo da tela continua pedindo confirmação. Desligado por padrão.</p>
+    <h3>Google Agenda</h3>
+    {calendar ? <>
+      <p>Conectada. Ele lê seus eventos e pede confirmação antes de criar, alterar ou excluir.</p>
+      <button disabled={busy} onClick={() => linkCalendar(window.jarvisDesktop?.disconnectCalendar(), 'Desconectando...')}>Desconectar a Google Agenda</button>
+    </> : <>
+      <p>Crie um cliente do tipo “App para computador” no Google Cloud e cole os dados abaixo. O passo a passo está no README. A senha fica só no navegador, e a autorização é guardada protegida pela sua conta do Windows.</p>
+      <label>ID do cliente<input aria-label="ID do cliente Google" autoComplete="off" maxLength={200} value={clientId} onChange={(event) => setClientId(event.target.value)} /></label>
+      <label>Chave do cliente<input aria-label="Chave do cliente Google" type="password" autoComplete="off" maxLength={200} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} /></label>
+      <button disabled={busy || !clientId.trim() || !clientSecret.trim()} onClick={() => linkCalendar(window.jarvisDesktop?.connectCalendar({ clientId: clientId.trim(), clientSecret: clientSecret.trim() }), 'Conclua a autorização no navegador...')}>Conectar a Google Agenda</button>
+    </>}
     <h3>Palavra de ativação no computador</h3>
     <label><input aria-label="Ativação local" type="checkbox" checked={localWake} onChange={(event) => setLocalWake(event.target.checked)} />Detectar “Jarvis” no computador</label>
     <p>{wakeConfigured ? 'Chave Picovoice disponível.' : 'Sem chave Picovoice, o que o microfone capta vai ao Gemini para saber se você chamou o JARVIS.'} Com a detecção local, só o que vier depois do nome sai do computador. Durante uma resposta, dizer “Jarvis” também o interrompe.</p>

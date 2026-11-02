@@ -7,15 +7,19 @@ import { useWorkspace, flushWorkspace } from './workspace'
 import { Boot } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
-import { BOOT_MS, useStore } from './store'
+import { BOOT_MS, useStore, type Timer } from './store'
 import { startVoice, type Voice, type VoiceMode } from './lib/voice'
-import { createSpeaker, cycleVoice, currentVoiceName } from './lib/tts'
+import { createSpeaker, cycleVoice, currentVoiceName, speakingAloud } from './lib/tts'
+import { watchApproval, type Approval } from './lib/bridge'
+import { approvalQuestion, ASK_AGAIN, readAnswer } from './lib/approvalVoice'
+import { finishLecture, recordLecture, type LectureRecording } from './lib/lectureRecorder'
+import { endsLecture } from './lib/lectureWords'
+import { alertLine, alertsToSpeak, loadSpoken, saveSpoken, type Alert } from './lib/spokenAlerts'
 import * as sfx from './lib/sfx'
 import * as music from './lib/music'
-import * as hands from './lib/hands'
 import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
-import { forRequest, forTool, attention } from './lib/fillers'
+import { forRequest, forTool, attention, speakFormally, working } from './lib/fillers'
 import { chooseResponsePace, isArticleRequest } from './lib/responsePace'
 import { mergeClarification, splitUnclearTranscript } from './lib/clarification'
 import {
@@ -68,6 +72,9 @@ const NAME = '(?:jarvis|jarvys|jervis|jarviss|jarv|járvis|jarves)'
 const BARE_NAME = new RegExp(`^(?:oi|olá|ola|ei)?\\s*${NAME}[\\s,.!?]*$`, 'i')
 /** A leading vocative on a real command: "Jarvis, what's the weather". */
 const LEADING_NAME = new RegExp(`^(?:oi|olá|ola|ei)?\\s*${NAME}\\b[\\s,.:!?-]*`, 'i')
+/** Called during a class, he listens for this long and goes back to writing it down. */
+const LECTURE_EAR_MS = 12000
+const NUDGE_CHECK_MS = 5 * 60000
 
 export default function App() {
   const store = useStore
@@ -88,11 +95,20 @@ export default function App() {
    * the phase, the speaker, or the busy state on its way to the floor.
    */
   const turn = useRef(0)
+  /** The confirmation waiting for an answer, and whether the microphone is open for it. */
+  const approval = useRef<Approval | null>(null)
+  const answering = useRef(false)
+  const doubts = useRef(0)
+  const asker = useRef<ReturnType<typeof createSpeaker> | null>(null)
+  const keepListening = useRef<ReturnType<typeof setInterval> | null>(null)
   const booting = useRef(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingClarification = useRef<{ before: string; after: string } | null>(null)
   const clarificationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [clapToStart, setClapToStart] = useState(false)
+  const recording = useRef<LectureRecording | null>(null)
+  /** Until when he takes what he hears as meant for him during a class. */
+  const lectureEar = useRef(0)
 
   useEffect(() => {
     const restore = () => {
@@ -139,7 +155,7 @@ export default function App() {
     s.setCaption('')
     s.setActiveTool(null)
     music.working(false)
-    music.duck(false)
+    music.duck(Boolean(store.getState().lecture))
     sfx.duck(false)
     s.setPhase('dormant')
   }
@@ -168,9 +184,10 @@ export default function App() {
       const today = new Date().toLocaleDateString('en-CA')
       const first = workspace.settings.briefingDay !== today
       const city = first ? workspace.settings.city.trim() : ''
-      const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/briefing?city=${encodeURIComponent(city)}`, { signal: AbortSignal.timeout(3000) })
-      const briefing = await response.json() as { greeting: string; line: string }
-      line = first ? briefing.line : `${briefing.greeting}.`
+      const { personality, learn, remember } = workspace.settings
+      const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/briefing?city=${encodeURIComponent(city)}&first=${first ? 1 : 0}&learn=${learn && remember ? 1 : 0}&formal=${personality === 'formal' ? 1 : 0}`, { signal: AbortSignal.timeout(3000) })
+      const briefing = await response.json() as { opening: string; line: string }
+      line = first ? briefing.line : briefing.opening
       useWorkspace.getState().setSettings({ briefingDay: today })
     } catch { return /* Silence is a fine way to start. */ }
     if (mine !== turn.current || !line) return
@@ -192,6 +209,11 @@ export default function App() {
   // -- one turn -------------------------------------------------------------
 
   const respond = async (said: string, voiceInput = false): Promise<void> => {
+    if (store.getState().lecture && endsLecture(said)) {
+      lectureEar.current = 0
+      await endLecture()
+      return
+    }
     clearClarification()
     const mine = ++turn.current
     const stale = () => mine !== turn.current
@@ -213,6 +235,7 @@ export default function App() {
     music.duck(true)
 
     const turnId = newId()
+    speakFormally(useWorkspace.getState().settings.personality === 'formal')
     let started = false
     let filled = false
     const pace = chooseResponsePace(said, useWorkspace.getState().settings.fast)
@@ -228,10 +251,12 @@ export default function App() {
       if (voiceInput) acknowledgement = setTimeout(() => {
         if (stale() || started || filled) return
         filled = true
-        store.getState().setCaption('Entendi, vou verificar.')
-        spk.sayFast('Entendi, vou verificar.')
+        const line = working()
+        store.getState().setCaption(line)
+        spk.sayFast(line)
       }, 1800)
       const { text } = await ask(said, history.current, {
+        onTone: (tone) => { if (!stale()) spk.setTone(tone) },
         onText: (delta) => {
           if (stale()) return
           if (!started) {
@@ -298,7 +323,7 @@ export default function App() {
       if (!stale()) {
         speaker.current = null
         sfx.duck(false)
-        music.duck(false)
+        music.duck(Boolean(store.getState().lecture))
         store.getState().setActiveTool(null)
         music.working(false)
         // Stay open. Having to say his name again to add one more sentence is
@@ -307,6 +332,51 @@ export default function App() {
         voice.current?.arm?.(15000)
       }
     }
+  }
+
+  // -- a class --------------------------------------------------------------
+
+  const beginLecture = async (lecture: { id: string; title: string; started: number }) => {
+    if (recording.current) return
+    recording.current = await recordLecture(lecture.id, (lost) => store.getState().setError(`Não consegui transcrever ${lost} minuto(s) da aula. Verifique a conexão.`))
+    store.getState().setLecture(lecture)
+    music.duck(true)
+  }
+
+  /** The notes open by themselves: the person asked for a class, not for a question. */
+  const endLecture = async () => {
+    const live = recording.current
+    const lecture = store.getState().lecture
+    if (!live || !lecture) return
+    recording.current = null
+    const mine = ++turn.current
+    const s = store.getState()
+    s.setLecture(null)
+    s.setPhase('thinking')
+    s.setCaption('Organizando as anotações da aula…')
+    music.duck(false)
+    let line = 'A aula terminou, mas não consegui organizar as anotações agora. O texto está salvo em Aprender.'
+    try {
+      await live.stop()
+      const notes = await finishLecture(lecture.id)
+      if (notes.notes) {
+        line = notes.notes.spoken || notes.notes.summary || line
+        store.getState().pushBlade({ id: `aula-${lecture.id}`, title: notes.title, kind: 'markup', html: notes.html, size: 'tall', hold: 'sticky' })
+      } else line = 'Não ouvi nada que pudesse anotar nessa aula.'
+    } catch (error) { console.error(error) }
+    if (mine !== turn.current) return
+    const after = store.getState()
+    after.pushTurn({ id: newId(), role: 'jarvis', text: line })
+    after.setCaption(line)
+    after.setPhase('speaking')
+    const spk = createSpeaker()
+    speaker.current = spk
+    spk.say(line)
+    await spk.end()
+    if (mine !== turn.current) return
+    speaker.current = null
+    listen(AWAIT_SPEECH_MS)
+    voice.current?.arm?.(15000)
   }
 
   // -- voice events ---------------------------------------------------------
@@ -321,13 +391,79 @@ export default function App() {
         return 'wake'
       case 'waking':
       case 'listening':
-        return 'command'
+        // The teacher is not talking to him. Everything else that is said goes to
+        // the notes, and he stays out of the conversation.
+        return store.getState().lecture && !answering.current && Date.now() > lectureEar.current ? 'guard' : 'command'
       default:
-        return 'guard' // thinking, tooling, speaking
+        // Thinking, tooling, speaking. A confirmation is the one thing he stops
+        // for in the middle of a turn, and only once he has finished asking.
+        return answering.current ? 'command' : 'guard'
     }
   }
 
+  /** Only while he is talking or working, and never over an answer he is waiting for. */
+  const mayBarge = () => useWorkspace.getState().settings.bargeIn && !answering.current && ['thinking', 'tooling', 'speaking'].includes(store.getState().phase)
+
+  // -- confirmations --------------------------------------------------------
+
+  const stopAsking = () => {
+    answering.current = false
+    asker.current?.cancel()
+    asker.current = null
+    if (keepListening.current) clearInterval(keepListening.current)
+    keepListening.current = null
+  }
+
+  /**
+   * Ask out loud, and only then listen.
+   *
+   * After, not during: words said over the question would be heard along with it,
+   * and the short fast voice keeps the wait small. The fast voice also means a
+   * confirmation still gets asked when the cloud voice has run out of quota.
+   */
+  const putToVoice = async (item: Approval, line: string) => {
+    answering.current = false
+    const began = Date.now()
+    while (speakingAloud() && Date.now() - began < 8000) await new Promise((resolve) => setTimeout(resolve, 120))
+    if (approval.current !== item) return
+    store.getState().setCaption(line)
+    const spk = createSpeaker()
+    asker.current = spk
+    spk.sayFast(line)
+    await spk.end()
+    if (approval.current !== item) return
+    answering.current = true
+    voice.current?.arm?.(30000)
+  }
+
+  const onApproval = (item: Approval | null) => {
+    stopAsking()
+    if (approval.current && !item) store.getState().setCaption('')
+    approval.current = item
+    doubts.current = 0
+    if (!item) return
+    void putToVoice(item, approvalQuestion(item.action))
+    // The window opened by asking is shorter than the time there is to answer.
+    keepListening.current = setInterval(() => { if (answering.current) voice.current?.arm?.(30000) }, 25000)
+  }
+
+  const answerApproval = (item: Approval, said: string) => {
+    const answer = readAnswer(said)
+    if (answer) {
+      sfx.play('heard')
+      item.decide(answer === 'yes')
+      return
+    }
+    // Twice is enough to ask. After that the card is there and the wait runs out.
+    if (doubts.current++ < 2) void putToVoice(item, ASK_AGAIN)
+    else voice.current?.arm?.(30000)
+  }
+
   const acceptVoice = (text: string) => {
+    if (approval.current) {
+      answerApproval(approval.current, text)
+      return
+    }
     const pending = pendingClarification.current
     if (pending) {
       clearClarification()
@@ -338,6 +474,12 @@ export default function App() {
   const onWake = (trailing: string) => {
     const phase = store.getState().phase
     if (phase === 'offline' || phase === 'boot') return
+
+    // His name alone, while he waits for a yes or a no, is not a new conversation.
+    if (approval.current && !trailing) {
+      voice.current?.arm?.(30000)
+      return
+    }
 
     store.getState().setError(null)
     sfx.play('wake')
@@ -367,9 +509,64 @@ export default function App() {
    * Someone started talking. This is the whole point of the rewrite: he stops,
    * immediately, whatever he was doing.
    */
+  /** Says what just came due, once he is free to. A reminder never talks over him. */
+  const spokenAlerts = useRef(loadSpoken())
+  const checkAlerts = async () => {
+    const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/alerts`, { signal: AbortSignal.timeout(3000) })
+    if (!response.ok) return
+    const { notifications, timers } = await response.json() as { notifications: Alert[]; timers: Timer[] }
+    store.getState().setTimers(timers)
+    const before = store.getState().phase
+    // In a class it stays on the screen. Nobody wants him speaking up in the room.
+    if ((before !== 'listening' && before !== 'dormant') || approval.current || store.getState().lecture) return
+    const due = alertsToSpeak(notifications, spokenAlerts.current, Date.now())
+    let line = ''
+    if (due.length) {
+      for (const alert of due) spokenAlerts.current.add(alert.id)
+      saveSpoken(spokenAlerts.current)
+      line = alertLine(due)
+    } else line = await nudge(before, timers.length > 0)
+    if (!line || store.getState().phase !== before) return
+
+    const mine = ++turn.current
+    if (!due.length) store.getState().pushTurn({ id: newId(), role: 'jarvis', text: line })
+    const spk = createSpeaker()
+    speaker.current = spk
+    clearIdle()
+    store.getState().setPhase('speaking')
+    store.getState().setCaption(line)
+    sfx.play('wake')
+    // In private mode the words stay on this computer.
+    if (useWorkspace.getState().settings.privacyMode) spk.sayFast(line)
+    else spk.say(line)
+    await spk.end()
+    if (mine !== turn.current) return
+    speaker.current = null
+    if (before === 'dormant') store.getState().setPhase('dormant')
+    else listen(FOLLOW_UP_MS)
+  }
+
+  /** Whether he has something of his own to bring up. The bridge rations it. */
+  const nudgedAt = useRef(0)
+  const nudge = async (phase: string, focusing: boolean) => {
+    const { initiative, privacyMode } = useWorkspace.getState().settings
+    if (phase !== 'listening' || !initiative || privacyMode || focusing || store.getState().quizOn || Date.now() - nudgedAt.current < NUDGE_CHECK_MS) return ''
+    nudgedAt.current = Date.now()
+    const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/nudge`, { signal: AbortSignal.timeout(3000) })
+    return response.ok ? (await response.json() as { say: string }).say : ''
+  }
+
   const onSpeechStart = () => {
+    // The answer he asked for. Treated as an interruption, a "sim" would cancel
+    // the very action it was approving.
+    if (answering.current) return
     clearIdle()
     const phase = store.getState().phase
+    if (store.getState().lecture && phase === 'listening') {
+      lectureEar.current = Date.now() + LECTURE_EAR_MS
+      sfx.play('wake')
+      return
+    }
     if (phase === 'offline' || phase === 'boot' || phase === 'dormant') return
 
     const wasBusy =
@@ -395,13 +592,10 @@ export default function App() {
 
     // People keep using his name as a vocative once they're already talking to
     // him. Strip it rather than sending "jarvis" to the model as a question.
-    if (BARE_NAME.test(text)) {
-      listen(AWAIT_SPEECH_MS)
-      return
-    }
     const said = text.replace(LEADING_NAME, '').trim()
-    if (!said) {
-      listen(AWAIT_SPEECH_MS)
+    if (BARE_NAME.test(text) || !said) {
+      if (approval.current) voice.current?.arm?.(30000)
+      else listen(AWAIT_SPEECH_MS)
       return
     }
 
@@ -409,6 +603,10 @@ export default function App() {
   }
 
   const onClarification = (text: string) => {
+    if (approval.current) {
+      answerApproval(approval.current, '')
+      return
+    }
     const parts = splitUnclearTranscript(text.replace(LEADING_NAME, '').trim())
     if (!parts) {
       store.getState().setCaption('Não entendi com clareza. Diga “Jarvis” e repita o pedido completo.')
@@ -441,7 +639,7 @@ export default function App() {
     if (useWorkspace.getState().settings.privacyMode) return
     if (voice.current?.live()) return
     await probeCapabilities()
-    voice.current = await startVoice({ mode, onWake, onSpeechStart, onPartial, onUtterance, onClarification, onError: onVoiceError })
+    voice.current = await startVoice({ mode, mayBarge, onWake, onSpeechStart, onPartial, onUtterance, onClarification, onError: onVoiceError })
     listen(AWAIT_SPEECH_MS)
   }
 
@@ -449,6 +647,10 @@ export default function App() {
   useEffect(() => {
     const actions = privacyActions.current
     if (privacyMode) {
+      // Stopping here and not finishing: finishing would send the words out.
+      void recording.current?.stop(false)
+      recording.current = null
+      useStore.getState().setLecture(null)
       if (!['offline', 'boot'].includes(useStore.getState().phase)) actions.goDormant()
       voice.current?.stop()
       voice.current = null
@@ -624,6 +826,22 @@ export default function App() {
           if (Object.keys(patch).length) useWorkspace.getState().setSettings({ visualTheme: 'helios', helios: patch })
           break
         }
+        case 'personality':
+          if (['formal', 'equilibrado', 'bem-humorado', 'sarcastico'].includes(a.value)) useWorkspace.getState().setSettings({ personality: a.value })
+          break
+        case 'initiative':
+          useWorkspace.getState().setSettings({ initiative: a.on === true })
+          break
+        case 'feeling':
+          s.feel(a.kind)
+          break
+        case 'study':
+          s.setQuizOn(a.quiz === true)
+          break
+        case 'lecture':
+          if (a.action === 'start') void beginLecture(args).catch((error: Error) => s.setError(`Não consegui começar a gravar: ${error.message}`))
+          else if (a.action === 'show') s.pushBlade({ id: `aula-${a.id}`, title: String(a.title), kind: 'markup', html: String(a.html), size: 'tall', hold: 'sticky' })
+          break
         case 'reset':
           s.resetUi()
           break
@@ -733,6 +951,7 @@ export default function App() {
   /** Space and the global shortcut are one gesture: "I'm talking to you". */
   const activate = () => {
     voice.current?.arm?.(30000, true)
+    if (store.getState().lecture) lectureEar.current = Date.now() + LECTURE_EAR_MS
     const phase = store.getState().phase
     if (phase === 'offline') {
       void powerOn()
@@ -767,6 +986,10 @@ export default function App() {
     }
     const meter = setInterval(pump, 66)
     const hotkey = window.jarvisDesktop?.onHotkey(activate)
+    const unwatchApproval = watchApproval(onApproval)
+    const alertTimer = setInterval(() => { void checkAlerts().catch(() => { /* The bridge restarts now and then. */ }) }, 5000)
+    const stopLecture = () => { void endLecture() }
+    window.addEventListener('jarvis:end-lecture', stopLecture)
 
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -790,34 +1013,6 @@ export default function App() {
         speaker.current = demo
         demo.say('Voz em português selecionada. À sua disposição, senhor.')
         void demo.end()
-        return
-      }
-
-      // G puts the camera on and starts tracking hands. Off by default and
-      // never implicit: a webcam that turns itself on because an interface
-      // thought it might be useful is not a trade anyone agreed to.
-      if (e.key === 'g' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        const on = store.getState().gestures
-        if (on) {
-          hands.disableHands()
-          store.getState().setGestures(false)
-        } else {
-          store.getState().setError(null)
-          void hands
-            .enableHands()
-            .then(() => store.getState().setGestures(true))
-            .catch((err: Error) => {
-              store.getState().setGestures(false)
-              store
-                .getState()
-                .setError(
-                  err?.name === 'NotAllowedError'
-                    ? 'Acesso à câmera negado: o controle por gestos não está disponível.'
-                    : `Não foi possível iniciar o controle por gestos: ${err?.message ?? err}`,
-                )
-            })
-        }
         return
       }
 
@@ -867,8 +1062,10 @@ export default function App() {
       clearClarification()
       voice.current?.stop()
       speaker.current?.cancel()
-      // The camera must not outlive the page that turned it on.
-      hands.disableHands()
+      unwatchApproval()
+      stopAsking()
+      clearInterval(alertTimer)
+      window.removeEventListener('jarvis:end-lecture', stopLecture)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

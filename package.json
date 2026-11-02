@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "1.4.4",
+  "version": "1.8.0",
   "description": "Assistente pessoal por voz para Windows, em português do Brasil, com interface holográfica.",
   "license": "MIT",
   "type": "module",
@@ -40,6 +40,10 @@
     "test:desktop-app": "node bridge/desktop-http.test.mjs",
     "test:electron": "node scripts/check-electron.mjs",
     "test:presence": "node scripts/check-presence.mjs",
+    "test:approval": "node scripts/check-approval-voice.mjs",
+    "test:hold": "node scripts/check-hold-approval.mjs",
+    "test:backup": "node scripts/check-backup.mjs",
+    "test:intelligence": "node scripts/eval-intelligence.mjs",
     "test:modes": "node scripts/check-modes.mjs",
     "test:studio": "node bridge/studio.test.mjs"
   },
@@ -47,7 +51,6 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.220",
     "@anthropic-ai/sdk": "^0.115.0",
     "@google/genai": "^2.32.0",
-    "@mediapipe/tasks-vision": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@napi-rs/canvas": "^1.0.13",
     "@picovoice/eagle-web": "^3.0.1",

@@ -17,6 +17,8 @@ export type Msg = Anthropic.Beta.BetaMessageParam
 export type AskHandlers = {
   /** Fires for each chunk of the spoken answer. */
   onText: (delta: string) => void
+  /** How the answer should sound, when the model says. */
+  onTone?: (tone: string) => void
   /** Fires when Claude starts running a remote tool. */
   onTool: (name: string) => void
 }

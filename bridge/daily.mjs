@@ -3,9 +3,10 @@ import { z } from 'zod'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { webAnswer } from './search.mjs'
 
 /**
- * The small everyday things: the weather, the music, the volume.
+ * The small everyday things: the weather, the music, the volume, a quick fact.
  *
  * Unlike the rest of the tools that change something, media and volume do not
  * ask for confirmation. A dialog in front of "pausa a música" defeats the
@@ -89,13 +90,14 @@ export async function changeVolume({ action, percent }, run = runMedia) {
   return run({ action: 'set_volume', percent: clamp(volume + (action === 'up' ? step : -step)) })
 }
 
-export function dailyServer({ run = runMedia, fetcher = fetch } = {}) {
+export function dailyServer({ run = runMedia, fetcher = fetch, search = webAnswer } = {}) {
   const safe = (handler) => async (args, extra) => {
     try { return { content: [{ type: 'text', text: JSON.stringify(await handler(args, extra?.signal)) }] } }
     catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] } }
   }
   return createSdkMcpServer({ name: 'jarvis_daily', version: '1.0.0', alwaysLoad: true, tools: [
     tool('weather', 'Consulta o clima atual e a previsão de até sete dias de uma cidade. Use a cidade padrão das preferências quando o usuário não disser outra; sem nenhuma, pergunte qual. Não pede confirmação.', { city: z.string().trim().min(2).max(120), days: z.number().int().min(1).max(7).optional() }, safe(({ city, days }, signal) => fetchWeather(city, { fetcher, signal, days }))),
+    tool('web_answer', 'Responde em segundos uma pergunta sobre algo atual, como notícia, placar, preço, cotação ou resultado, usando a busca do Google. Prefira isto ao navegador quando bastar um dado. Use o navegador para ler uma página inteira ou agir em um site. Fale a resposta em poucas frases. Não pede confirmação.', { question: z.string().trim().min(3).max(300) }, safe(({ question }, signal) => search(question, { signal }))),
     tool('media_control', 'Envia ao Windows uma tecla de mídia: tocar ou pausar, próxima faixa, faixa anterior ou parar. Age no player que o Windows considerar ativo, como Spotify ou YouTube. O resultado não comprova qual aplicativo reagiu. Não pede confirmação.', { action: z.enum(MEDIA_ACTIONS) }, safe(({ action }) => run({ action }))),
     tool('volume', 'Consulta ou muda o volume geral do Windows. Em set, percent é o nível de 0 a 100. Em up e down, percent é o quanto mudar, com 10 como padrão. Não pede confirmação.', { action: z.enum(VOLUME_ACTIONS), percent: z.number().min(0).max(100).optional() }, safe((args) => changeVolume(args, run))),
   ] })

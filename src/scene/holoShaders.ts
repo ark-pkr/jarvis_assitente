@@ -34,12 +34,27 @@ float noise(vec3 p) {
 float gasNoise(vec3 p) {
   return noise(p) * 0.53 + noise(p * 2.03) * 0.28 + noise(p * 4.1) * 0.14 + noise(p * 8.2) * 0.07 + noise(p * 16.3) * 0.035;
 }
-vec3 stars(vec3 direction) {
-  vec3 q = direction * 300.0, cell = floor(q);
+float starField(vec3 q, float rarity) {
+  vec3 cell = floor(q);
   float seed = hash(cell);
-  if (seed < 0.965) return vec3(0.0);
-  float light = smoothstep(0.46, 0.0, length(fract(q) - 0.5)) * pow((seed - 0.965) / 0.035, 4.0) * 1.7;
-  return light * mix(vec3(0.72, 0.82, 1.0), vec3(1.0, 0.8, 0.6), hash(cell + 7.0));
+  if (seed < rarity) return 0.0;
+  return smoothstep(0.46, 0.0, length(fract(q) - 0.5)) * pow((seed - rarity) / (1.0 - rarity), 4.0);
+}
+// The sky behind the hole. It is read at the end of each bent ray, so it is lensed
+// like everything else: the clouds and stars smear around the shadow on their own.
+vec3 sky(vec3 d) {
+  // A band across the sky, tilted against the disc so the two do not line up.
+  float band = exp(-pow(d.y * 0.92 + d.x * 0.38, 2.0) * 5.5);
+  vec3 q = d * 2.4 + 7.0;
+  float large = noise(q);
+  float cloud = smoothstep(0.44, 0.84, large * 0.62 + noise(q * 2.3 + large) * 0.28 + noise(q * 5.1) * 0.1);
+  float dust = smoothstep(0.42, 0.7, noise(q * 3.4 + 19.0));
+  vec3 gas = mix(vec3(0.018, 0.034, 0.085), vec3(0.06, 0.03, 0.075), smoothstep(0.35, 0.68, large));
+  vec3 nebula = gas * cloud * (0.12 + band * 1.1) * (1.0 - dust * 0.55);
+  float bright = starField(d * 300.0, 0.965) * 1.7;
+  float faint = starField(d * 520.0, 0.93) * (0.16 + band * 0.5);
+  vec3 star = mix(vec3(0.72, 0.82, 1.0), vec3(1.0, 0.8, 0.6), hash(floor(d * 300.0) + 7.0));
+  return nebula + star * bright + vec3(0.8, 0.85, 1.0) * faint;
 }
 
 vec3 disc(vec3 at, vec3 ray) {
@@ -110,7 +125,7 @@ void main() {
     }
     p = np; v = nv;
   }
-  colour = colour * uGlow + through * stars(normalize(v)) * 0.8;
+  colour = colour * uGlow + through * sky(normalize(v)) * 0.8;
   // ACES, so the hottest gas rolls off to white instead of clipping.
   colour = clamp(colour * (2.51 * colour + 0.03) / (colour * (2.43 * colour + 0.59) + 0.14), 0.0, 1.0);
   fragment = vec4(pow(colour, vec3(1.0 / 2.2)) + (hash(vec3(gl_FragCoord.xy, fract(uTime))) - 0.5) / 255.0, 1.0);

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { BRIDGE_WS_URL } from '../config'
 import { useWorkspace } from '../workspace'
+import { TasksPanel } from './TasksPanel'
 
 const endpoint = BRIDGE_WS_URL.replace(/^ws/, 'http').replace(/\/ws\/?$/, '').replace(/\/$/, '') + '/assistant'
-type Entry = { id: string; kind: string; title: string; notes: string; next: string; context: string; status: string; rootId: string; file: string; due: string; steps: { appId: string; rootId?: string; file?: string }[]; newWord: boolean; minutes: number; updated: number }
+type Entry = { id: string; kind: string; title: string; notes: string; next: string; context: string; status: string; rootId: string; file: string; due: string; steps: { appId: string; rootId?: string; file?: string }[]; newWord: boolean; minutes: number; repeat: string; updated: number }
 type Snapshot = { entries: Entry[]; activities: { id: string; title: string; notes: string; status: string }[]; notifications: { id: string; title: string }[]; roots: { id: string; name: string; path: string }[] }
-const empty = () => ({ kind: 'projeto', title: '', notes: '', next: '', context: '', status: 'pendente', rootId: '', file: '', due: '', steps: [] as Entry['steps'], newWord: false, minutes: 0 })
+const empty = () => ({ kind: 'projeto', title: '', notes: '', next: '', context: '', status: 'pendente', rootId: '', file: '', due: '', steps: [] as Entry['steps'], newWord: false, minutes: 0, repeat: '' })
 async function request(body?: unknown) {
   const response = await fetch(endpoint, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined)
   const result = await response.json()
@@ -46,7 +47,7 @@ export function AssistantPanel({ send }: { send: (text: string) => void }) {
       <button onClick={() => send('Use computer_summary e explique o consumo atual de CPU, memória e espaço em disco. Não encerre processos.')}>Resumo do computador</button>
       <button onClick={() => send('Use editor_selection para explicar o trecho que compartilhei do VS Code, linha por linha, com exemplos. Se não houver seleção válida, ensine a usar o comando JARVIS: Compartilhar seleção no VS Code.')}>Explicar seleção do VS Code</button>
       <button onClick={() => send('Liste project_changes e mostre as últimas alterações. Pergunte qual alteração quero desfazer antes de usar project_undo.')}>Alterações e recuperação</button>
-      <button onClick={() => send('Quero iniciar um bloco de foco de 25 minutos. Consulte a hora local e crie um lembrete para o fim do bloco usando assistant_save, com confirmação explícita. Não abra aplicativos. Depois sugira uma pausa de 5 minutos.')}>Foco por 25 minutos</button>
+      <button onClick={() => send('Quero um bloco de foco de 25 minutos com pausa de 5. Use timer_start. Não abra aplicativos.')}>Foco por 25 minutos</button>
       <button onClick={() => send('Ajude-me a planejar um projeto. Pergunte só o que for essencial, proponha etapas e critérios de conclusão, use project_plan para validar o plano e só salve tarefas com minha confirmação.')}>Planejar um projeto</button>
       <button onClick={() => send('Crie flashcards de estudo. Selecione uma fonte que já autorizei ou pergunte qual assunto/material usar; leia a fonte antes de gerar cartões, cite arquivo e páginas/linhas, e depois aplique revisão ativa: mostre uma pergunta por vez e espere minha resposta antes de revelar a solução.')}>Criar flashcards</button>
       <button onClick={() => send('Quero revisar um texto. Peça o texto se ainda não o enviei; preserve meu estilo, apresente uma versão revisada e explique brevemente as principais mudanças. Não substitua nem grave o arquivo original.')}>Revisar um texto</button>
@@ -72,6 +73,7 @@ export function AssistantPanel({ send }: { send: (text: string) => void }) {
     <label>Situação<select aria-label="Situação do registro" value={draft.status} onChange={(event) => change({ status: event.target.value })}>{['pendente', 'executando', 'aguardando você', 'concluído', 'falhou'].map((name) => <option key={name}>{name}</option>)}</select></label>
     <label>Arquivo relacionado (dentro da pasta escolhida)<input aria-label="Arquivo do registro" value={draft.file} maxLength={500} onChange={(event) => change({ file: event.target.value })} /></label>
     {draft.kind === 'lembrete' && <label>Data e hora (horário de Brasília)<input aria-label="Data do lembrete" type="datetime-local" value={draft.due ? new Date(draft.due).toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T').slice(0, 16) : ''} onChange={(event) => change({ due: event.target.value ? event.target.value + ':00-03:00' : '' })} /></label>}
+    {draft.kind === 'lembrete' && <label>Repetir<select aria-label="Repetição do lembrete" value={draft.repeat} onChange={(event) => change({ repeat: event.target.value })}><option value="">Não repetir</option><option value="diario">Todo dia</option><option value="dias-uteis">Dias úteis</option><option value="semanal">Toda semana</option><option value="mensal">Todo mês</option></select></label>}
     {draft.kind === 'lembrete' && <label>Contexto opcional (app ou projeto)<input aria-label="Contexto do lembrete" value={draft.context} maxLength={120} onChange={(event) => change({ context: event.target.value })} placeholder="Ex.: Word, VS Code ou Projeto Atlas" /></label>}
     {draft.kind === 'rotina' && <>
       <p>Escolha os aplicativos para esta rotina. Para outros aplicativos cadastrados, peça por voz. O projeto usa a pasta escolhida acima.</p>
@@ -81,6 +83,7 @@ export function AssistantPanel({ send }: { send: (text: string) => void }) {
     </>}
     <div className="workspace-row"><button disabled={busy || !draft.title.trim()} onClick={() => { void save() }}>Salvar registro</button><button onClick={() => setDraft(empty())}>Limpar formulário</button></div>
     <p role="status">{message}</p>
+    <TasksPanel send={send} />
     <h3>Pedidos recentes</h3>
     <p>Acompanhe o processamento dos últimos pedidos. “Concluído” aqui indica que a resposta terminou; confira o resultado de cada ação.</p>
     <button onClick={() => { if (window.confirm('Apagar o registro dos pedidos recentes?')) void request({ action: 'clearActivities' }).then(refresh).catch((error) => setMessage(error.message)) }}>Limpar pedidos recentes</button>
@@ -89,7 +92,7 @@ export function AssistantPanel({ send }: { send: (text: string) => void }) {
     <button onClick={() => { void refresh().catch((error) => setMessage(error.message)) }}>Atualizar central</button>
     {snapshot.entries.map((entry) => <article className="assistant-entry" key={entry.id}>
       <b>{entry.title}</b><small>{entry.kind} · {entry.status} · {new Date(entry.updated).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</small>
-      <p>{entry.notes}</p>{entry.next && <p>Próximo passo: {entry.next}</p>}{entry.due && <p>Quando: {new Date(entry.due).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>}{entry.context && <p>Contexto: {entry.context}</p>}
+      <p>{entry.notes}</p>{entry.next && <p>Próximo passo: {entry.next}</p>}{entry.due && <p>{entry.repeat ? 'Próxima vez' : 'Quando'}: {new Date(entry.due).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>}{entry.context && <p>Contexto: {entry.context}</p>}
       <div className="workspace-row"><button onClick={() => setDraft({ ...entry })}>Editar</button>
         <button onClick={() => send(entry.kind === 'rotina' ? `Execute a rotina ${JSON.stringify(entry.title)}, id ${entry.id}, usando routine_run. Confirme cada abertura e relate falhas.` : `Consulte assistant_overview e retome o registro ${entry.id}, ${JSON.stringify(entry.title)}. Explique o próximo passo e me ajude a continuar. Use arquivos autorizados se necessário; não invente progresso.`)}>{entry.kind === 'rotina' ? 'Executar rotina' : 'Continuar'}</button>
         <button onClick={() => { if (window.confirm(`Excluir ${entry.title}?`)) void request({ action: 'delete', id: entry.id }).then(refresh).catch((error) => setMessage(error.message)) }}>Excluir</button></div>

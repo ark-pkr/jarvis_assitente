@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useWorkspace, type HeliosSettings } from '../workspace'
-import { accentFor, useStore } from '../store'
+import { accentFor, feelingNow, useStore } from '../store'
+import { feelingColour, hexColour } from './sphereMood'
 import { NeuralSphere } from './NeuralSphere'
 import { HoloCore } from './HoloCore'
 export type { Drive } from './DetailedScene'
@@ -11,6 +12,8 @@ const Detailed = lazy(() => import('./DetailedScene').then((module) => ({ defaul
 function LightScene({ active }: { active: boolean }) {
   const phase = useStore((state) => state.phase)
   const ui = useStore((state) => state.ui)
+  const feeling = useStore(feelingNow)
+  const shade = feelingColour(phase, feeling)
   const visualTheme = useWorkspace((state) => state.settings.visualTheme)
   const wantsHole = useWorkspace((state) => state.settings.holoCore)
   const [holeFailed, setHoleFailed] = useState(false)
@@ -32,7 +35,7 @@ function LightScene({ active }: { active: boolean }) {
     }
   }) : [], [visualTheme])
   return <div className="scene scene-light" data-paused={!active} data-theme={visualTheme} aria-hidden="true" style={{
-    ['--reactor-color' as string]: ui.reactor.color || accentFor(phase, ui),
+    ['--reactor-color' as string]: ui.reactor.color || accentFor(phase, ui, shade && hexColour(shade)),
     ['--reactor-scale' as string]: ui.reactor.scale,
   }}>
     {hole && <HoloCore active={active} onFailure={holeFailure} />}

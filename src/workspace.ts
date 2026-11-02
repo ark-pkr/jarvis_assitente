@@ -3,7 +3,8 @@ import type { Turn } from './store'
 
 export type Conversation = { id: string; title: string; updated: number; turns: Turn[] }
 export type HeliosSettings = { paused: boolean; speed: number; glow: number; separation: number; color: 'gold' | 'cyan' | 'violet' | 'emerald' | 'rose'; quality: 'auto' | 'eco' | 'balanced' | 'ultra'; bloom: boolean; autoRotate: boolean; introOnStartup: boolean; cinema: boolean; introSequence: number }
-export type Settings = { inputDeviceId: string; music: number; voiceVolume: number; voiceRate: number; fast: boolean; remember: boolean; lightVisuals: boolean; holoCore: boolean; visualTheme: 'sphere' | 'reactor' | 'helios'; helios: HeliosSettings; speechPause: number; experienceVersion: number; naturalVoice: boolean; neuralVoice: string; newsTopics: string; voiceIdentityRequired: boolean; speakerThreshold: number; mode: 'assistente' | 'desenvolvimento' | 'analise' | 'tutor'; activityProfile: 'pessoal' | 'trabalho' | 'estudo' | 'descanso'; privacyMode: boolean; sidePanelsVisible: boolean; bootSeen: boolean; fullBoot: boolean; greeting: boolean; briefingDay: string; city: string }
+export type Personality = 'formal' | 'equilibrado' | 'bem-humorado' | 'sarcastico'
+export type Settings = { initiative: boolean; bargeIn: boolean; personality: Personality; learn: boolean; windowContext: boolean; inputDeviceId: string; music: number; voiceVolume: number; voiceRate: number; fast: boolean; remember: boolean; lightVisuals: boolean; holoCore: boolean; visualTheme: 'sphere' | 'reactor' | 'helios'; helios: HeliosSettings; speechPause: number; experienceVersion: number; naturalVoice: boolean; neuralVoice: string; newsTopics: string; voiceIdentityRequired: boolean; speakerThreshold: number; mode: 'assistente' | 'desenvolvimento' | 'analise' | 'tutor'; activityProfile: 'pessoal' | 'trabalho' | 'estudo' | 'descanso'; privacyMode: boolean; sidePanelsVisible: boolean; bootSeen: boolean; fullBoot: boolean; greeting: boolean; briefingDay: string; city: string }
 type SettingsPatch = Partial<Omit<Settings, 'helios'>> & { helios?: Partial<HeliosSettings> }
 export type Learning = { level: string; minutes: number; topic: string; goal: string; completed: string[]; pdfFolder: string; pdfFile: string; pdfTopic: string; pageFrom: number; pageTo: number; exampleTarget: 'word' | 'vscode'; exampleFolder: string; exampleFile: string }
 const learningDefaults: Learning = { level: 'Iniciante', minutes: 30, topic: 'logica', goal: '', completed: [], pdfFolder: '', pdfFile: '', pdfTopic: '', pageFrom: 1, pageTo: 3, exampleTarget: 'word', exampleFolder: '', exampleFile: 'aula-exemplo.py' }
@@ -12,7 +13,7 @@ const key = 'jarvis.workspace.v1'
 const mirrorWindow = new URLSearchParams(location.search).has('mini')
 const fresh = (): Conversation => ({ id: crypto.randomUUID(), title: 'Nova conversa', updated: Date.now(), turns: [] })
 const initial = fresh()
-const defaults: Settings = { inputDeviceId: '', music: .04, voiceVolume: 1, voiceRate: 1.25, fast: true, remember: true, lightVisuals: true, holoCore: true, visualTheme: 'sphere', helios: { paused: false, speed: 1, glow: 1, separation: 0, color: 'gold', quality: 'auto', bloom: true, autoRotate: true, introOnStartup: true, cinema: false, introSequence: 0 }, speechPause: .8, experienceVersion: 9, naturalVoice: true, neuralVoice: 'Charon', newsTopics: '', voiceIdentityRequired: false, speakerThreshold: .72, mode: 'assistente', activityProfile: 'pessoal', privacyMode: false, sidePanelsVisible: false, bootSeen: false, fullBoot: false, greeting: true, briefingDay: '', city: '' }
+const defaults: Settings = { initiative: true, bargeIn: false, personality: 'equilibrado', learn: true, windowContext: false, inputDeviceId: '', music: .04, voiceVolume: 1, voiceRate: 1.25, fast: true, remember: true, lightVisuals: true, holoCore: true, visualTheme: 'sphere', helios: { paused: false, speed: 1, glow: 1, separation: 0, color: 'gold', quality: 'auto', bloom: true, autoRotate: true, introOnStartup: true, cinema: false, introSequence: 0 }, speechPause: .8, experienceVersion: 9, naturalVoice: true, neuralVoice: 'Charon', newsTopics: '', voiceIdentityRequired: false, speakerThreshold: .72, mode: 'assistente', activityProfile: 'pessoal', privacyMode: false, sidePanelsVisible: false, bootSeen: false, fullBoot: false, greeting: true, briefingDay: '', city: '' }
 let saved: { sessions?: Conversation[]; active?: string; memory?: string; settings?: Settings; learning?: Learning } = {}
 try { saved = JSON.parse(localStorage.getItem(key) || '{}') } catch { /* recover with empty workspace */ }
 // Apply the requested clearer audio and balanced reasoning once, preserving later adjustments.
@@ -82,11 +83,12 @@ export const useWorkspace = create<Workspace>((set, get) => ({
 
 // Persistence is debounced so streamed tokens do not block rendering.
 let timer: ReturnType<typeof setTimeout> | undefined
+let replaced = false
 export function flushWorkspace() {
   clearTimeout(timer)
   // Its snapshot went stale the moment it loaded, and writing it back would
   // overwrite everything the main window saved since.
-  if (mirrorWindow) return
+  if (mirrorWindow || replaced) return
   const { sessions, active, memory, settings, learning } = useWorkspace.getState()
   if (settings.privacyMode) return
   try {
@@ -98,6 +100,19 @@ export function flushWorkspace() {
 }
 useWorkspace.subscribe(() => { clearTimeout(timer); timer = setTimeout(flushWorkspace, 350) })
 window.addEventListener('pagehide', flushWorkspace)
+
+/** Null in the floating orb, which has no say over this storage. */
+export function workspaceSnapshot() {
+  if (mirrorWindow) return null
+  flushWorkspace()
+  return localStorage.getItem(key)
+}
+/** Takes effect on the reload that must follow; until then nothing may write the old state back. */
+export function replaceWorkspace(raw: string | null) {
+  replaced = true
+  if (raw) localStorage.setItem(key, raw)
+  else localStorage.removeItem(key)
+}
 
 export function conversationContext() {
   const state = useWorkspace.getState()
@@ -120,5 +135,5 @@ export function conversationContext() {
     : ''
   return { context: state.settings.privacyMode ? [] : state.sessions.find((s) => s.id === state.active)?.turns.slice(-40) ?? [],
     memory: state.settings.privacyMode ? privacy : [profile, state.settings.remember ? state.memory : ''].filter(Boolean).join('\n').slice(0, 6000),
-    fast: state.settings.fast, privacyMode: state.settings.privacyMode, mode: state.settings.mode }
+    fast: state.settings.fast, privacyMode: state.settings.privacyMode, mode: state.settings.mode, learn: state.settings.learn && state.settings.remember, personality: state.settings.personality }
 }

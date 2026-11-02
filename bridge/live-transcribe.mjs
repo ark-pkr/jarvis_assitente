@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from '@google/genai'
-import { CUSTOM_VOCABULARY, isNoise } from './transcribe.mjs'
+import { isNoise, vocabulary } from './transcribe.mjs'
 
 /**
  * Transcribing while the words are being said.
@@ -22,7 +22,7 @@ const SESSION_LIMIT_MS = 120000
 
 const connectGemini = (callbacks) => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }).live.connect({
   model: process.env.JARVIS_LIVE_ASR_MODEL || 'gemini-3.5-transcribe-live',
-  config: { responseModalities: [Modality.TEXT], inputAudioTranscription: { languageCodes: ['pt-BR'], customVocabulary: CUSTOM_VOCABULARY } },
+  config: { responseModalities: [Modality.TEXT], inputAudioTranscription: { languageCodes: ['pt-BR'], customVocabulary: vocabulary() } },
   callbacks,
 })
 

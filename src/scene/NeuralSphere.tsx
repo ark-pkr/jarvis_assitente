@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useStore } from '../store'
-import { ACCENT, GOLD, MOODS, easeMood, mix, neighbours, parseColour, stepSignals, type Mood, type Rgb, type Signal } from './sphereMood'
+import { feelingNow, useStore } from '../store'
+import { ACCENT, GOLD, MOODS, easeMood, feelingColour, mix, moodFor, neighbours, parseColour, stepSignals, type Mood, type Rgb, type Signal } from './sphereMood'
 
 type Point = { x: number; y: number; z: number }
 type ProjectedPoint = { x: number; y: number; z: number }
@@ -197,10 +197,11 @@ export function NeuralSphere({ active }: { active: boolean }) {
     let reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     const draw = () => {
-      const { phase, ui } = useStore.getState()
+      const state = useStore.getState()
+      const { phase, ui } = state
       const accent = ACCENT[phase] ?? tinted
       // Asked for a colour, the whole sphere takes it, thought included.
-      const chosen = parseColour(ui.reactor.color ?? ui.accent)
+      const chosen = parseColour(ui.reactor.color ?? ui.accent) ?? feelingColour(phase, feelingNow(state))
       paintSphere(context, width, height, { time: elapsed, angle, level, mood, signals, colour: chosen ?? GOLD, accent: chosen ?? accent })
       if (ACCENT[phase]) tinted = ACCENT[phase]
     }
@@ -219,8 +220,9 @@ export function NeuralSphere({ active }: { active: boolean }) {
         const delta = previousFrame ? Math.min((now - previousFrame) / 1000, 0.1) : 0
         previousFrame = now
         elapsed += delta
-        const { level: target, phase } = useStore.getState()
-        const wanted = MOODS[phase]
+        const state = useStore.getState()
+        const { level: target, phase } = state
+        const wanted = moodFor(phase, feelingNow(state))
         mood = easeMood(mood, wanted, delta)
         angle += delta * mood.spin
         // The store updates at 15 Hz; easing hides the steps at 30.

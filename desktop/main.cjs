@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, session, ipcMain, dialog, safeStorage, utilityProcess, Notification, shell, globalShortcut, screen, desktopCapturer } = require('electron')
+const { app, BrowserWindow, Menu, Tray, nativeImage, session, ipcMain, clipboard, dialog, safeStorage, utilityProcess, Notification, shell, globalShortcut, screen, desktopCapturer } = require('electron')
+const { connectCalendar, revokeCalendar } = require('./calendar-auth.cjs')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const { randomBytes } = require('node:crypto')
@@ -24,16 +25,26 @@ const MINI_SIZE = { width: 190, height: 230 }
 let win, mini, tray, worker, origin, config = {}, quitting = false, restarting = false, notificationTimer, contextTimer, contextWarningShown = false
 let hotkeyError = '', jarvisPhase = 'offline', attentionReturn = null
 const log = (text) => { void fs.appendFile(path.join(directory, 'desktop.log'), `${new Date().toISOString()} ${text}\n`).catch(() => {}) }
+const decrypted = (value) => value && safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(value, 'base64')) : ''
+const calendarEnv = () => config.encryptedCalendar ? { JARVIS_GOOGLE_CLIENT_ID: config.calendarClientId, JARVIS_GOOGLE_CLIENT_SECRET: decrypted(config.encryptedCalendarSecret), JARVIS_GOOGLE_REFRESH_TOKEN: decrypted(config.encryptedCalendar) } : {}
 const getKey = () => config.encryptedKey ? safeStorage.decryptString(Buffer.from(config.encryptedKey, 'base64')) : ''
 const persist = () => fs.writeFile(configFile, JSON.stringify(config, null, 2))
 const trusted = (event) => { if (new URL(event.senderFrame.url).origin !== origin || event.sender !== win?.webContents) throw new Error('Pedido recusado.') }
+async function restartBridge() {
+  restarting = true
+  if (worker) await new Promise((resolve) => { worker.once('exit', resolve); worker.kill(); setTimeout(resolve, 3000) })
+  try { await startBridge() } finally { restarting = false }
+  setTimeout(() => { if (!quitting && !win.isDestroyed()) void win.reload() }, 250)
+}
 async function startBridge() {
   const port = new URL(origin).port
   worker = utilityProcess.fork(path.join(root, 'bridge', 'server.mjs'), [], {
     cwd: data, stdio: 'pipe', serviceName: 'JARVIS - assistente local',
     env: { ...process.env, GEMINI_API_KEY: getKey(), JARVIS_PROVIDER: 'gemini', JARVIS_MODEL: config.model || 'gemini-3.5-flash',
       JARVIS_DESKTOP: '1', JARVIS_BRIDGE_PORT: port, JARVIS_ALLOWED_ORIGINS: origin,
-      JARVIS_SESSION_TOKEN: token, JARVIS_DATA_DIR: data, JARVIS_STATIC_DIR: path.join(root, 'dist') },
+      JARVIS_SESSION_TOKEN: token, JARVIS_DATA_DIR: data, JARVIS_STATIC_DIR: path.join(root, 'dist'), JARVIS_VERSION: app.getVersion(),
+      // Outside the app's own folder, so that uninstalling or wiping it does not take the copies too.
+      ...(process.env.JARVIS_DESKTOP_TEST_DATA ? {} : { JARVIS_BACKUP_DIR: path.join(app.getPath('documents'), 'JARVIS Backups') }), ...calendarEnv() },
   })
   worker.stdout?.on('data', (text) => log(text.toString()))
   worker.stderr?.on('data', (text) => log(text.toString()))
@@ -133,6 +144,8 @@ async function boot() {
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Somente links HTTP ou HTTPS podem ser abertos.')
     await shell.openExternal(url.href)
   })
+  // The page never gets the clipboard permission, which would also let it read.
+  ipcMain.handle('jarvis:copy-text', (event, text) => { trusted(event); if (typeof text === 'string' && text.length <= 200000) clipboard.writeText(text) })
   ipcMain.handle('jarvis:voice-identity-status', (event) => {
     trusted(event)
     return { configured: Boolean(config.encryptedVoiceAccessKey), enrolled: Boolean(config.encryptedVoiceProfile) }
@@ -166,7 +179,7 @@ async function boot() {
   })
   ipcMain.handle('jarvis:settings', (event) => { trusted(event); return { configured: Boolean(config.encryptedKey), model: config.model || 'gemini-3.5-flash', startOnLogin: loginSettings(), contextReminders: config.contextReminders === true,
     autoActivate: config.autoActivate === true, clapToStart: config.clapToStart === true, miniOrb: config.miniOrb !== false, hotkey: config.hotkey || DEFAULT_HOTKEY, hotkeyError,
-    localWake: config.localWake !== false, wakeConfigured: Boolean(config.encryptedWakeKey || config.encryptedVoiceAccessKey) } })
+    localWake: config.localWake !== false, wakeConfigured: Boolean(config.encryptedWakeKey || config.encryptedVoiceAccessKey), calendarConnected: Boolean(config.encryptedCalendar) } })
   ipcMain.handle('jarvis:wake-key', (event) => { trusted(event); return config.localWake === false ? '' : wakeKey() })
   ipcMain.on('jarvis:state', (event, state) => {
     // The page keeps publishing while the app quits, and throwing in here puts up
@@ -222,10 +235,34 @@ async function boot() {
     }
     if (input.hotkey !== undefined) { if (typeof input.hotkey !== 'string' || !/^[A-Za-z0-9]+(\+[A-Za-z0-9]+)+$/.test(input.hotkey) || input.hotkey.length > 40) throw new Error('Atalho inválido.'); config.hotkey = input.hotkey; registerHotkey() }
     await persist()
-    restarting = true
-    if (worker) await new Promise((resolve) => { worker.once('exit', resolve); worker.kill(); setTimeout(resolve, 3000) })
-    try { await startBridge() } finally { restarting = false }
-    setTimeout(() => { if (!quitting && !win.isDestroyed()) void win.reload() }, 250)
+    await restartBridge()
+  })
+  ipcMain.handle('jarvis:calendar-connect', async (event, input) => {
+    trusted(event)
+    const clientId = String(input?.clientId ?? '').trim()
+    const clientSecret = String(input?.clientSecret ?? '').trim()
+    if (!/^[\w.-]{10,200}\.apps\.googleusercontent\.com$/.test(clientId) || clientSecret.length < 8 || clientSecret.length > 200) throw new Error('Confira o ID e a chave do cliente do Google.')
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('A proteção de credenciais do Windows não está disponível.')
+    const refreshToken = await connectCalendar({ clientId, clientSecret, open: (url) => shell.openExternal(url) })
+    config.calendarClientId = clientId
+    config.encryptedCalendarSecret = safeStorage.encryptString(clientSecret).toString('base64')
+    config.encryptedCalendar = safeStorage.encryptString(refreshToken).toString('base64')
+    await persist()
+    await restartBridge()
+  })
+  ipcMain.handle('jarvis:active-window', async (event) => {
+    trusted(event)
+    const active = await Promise.race([getActiveWindow(), new Promise((resolve) => setTimeout(resolve, 1500, null))])
+    // His own window says nothing about what "isso" means.
+    return active && !win?.isFocused() ? `${active.process}: ${active.title}` : ''
+  })
+  ipcMain.handle('jarvis:calendar-disconnect', async (event) => {
+    trusted(event)
+    const refreshToken = decrypted(config.encryptedCalendar)
+    if (refreshToken) await revokeCalendar(refreshToken)
+    delete config.calendarClientId; delete config.encryptedCalendarSecret; delete config.encryptedCalendar
+    await persist()
+    await restartBridge()
   })
   await startBridge(); await createWindow()
   registerHotkey()

@@ -213,8 +213,22 @@ function defined<T extends object>(patch: T | undefined): Partial<T> {
  */
 const MAX_ORBITS = 8
 
+export type Timer = { id: string; title: string; minutes: number; rest: number; ends: number }
+export type Lecture = { id: string; title: string; started: number }
+
 type State = {
   phase: Phase
+  /** Countdowns running on the bridge, polled so one survives a reload. */
+  timers: Timer[]
+  /** The class being written down, if any. */
+  lecture: Lecture | null
+  quizOn: boolean
+  /** A feeling lasting a moment. Clears itself. */
+  flash: Feeling | null
+  setTimers: (timers: Timer[]) => void
+  setLecture: (lecture: Lecture | null) => void
+  setQuizOn: (on: boolean) => void
+  feel: (feeling: Feeling) => void
   /** 0..1 mic loudness, drives the reactor pulse. */
   level: number
   /** What JARVIS is currently reading aloud or has just said. */
@@ -225,9 +239,6 @@ type State = {
   connected: string[]
   /** Name of the speech-synthesis voice in use, shown in the HUD. */
   voice: string
-  /** Whether the camera is on and hands are being tracked. Store-backed rather
-   *  than read off the tracker, because the indicator has to re-render. */
-  gestures: boolean
   /** Set while JARVIS is taking a look, to whatever he said he was looking for.
    *  null when he is not. The camera light is on either way — this says why. */
   looking: string | null
@@ -247,7 +258,6 @@ type State = {
   ui: UiState
 
   setVoice: (v: string) => void
-  setGestures: (on: boolean) => void
   setLooking: (why: string | null) => void
   setBootNote: (n: string) => void
   setBootShort: (short: boolean) => void
@@ -276,7 +286,23 @@ type State = {
   clearScreen: (what: 'all' | 'panels' | 'transcript') => void
 }
 
+/** Long enough to be seen from across the room, short enough not to outstay the moment. */
+const FLASH_MS = 2600
+let flashTimer: ReturnType<typeof setTimeout> | undefined
+
 export const useStore = create<State>((set) => ({
+  timers: [],
+  lecture: null,
+  quizOn: false,
+  flash: null,
+  setTimers: (timers) => set({ timers }),
+  setLecture: (lecture) => set({ lecture }),
+  setQuizOn: (quizOn) => set({ quizOn }),
+  feel: (flash) => {
+    clearTimeout(flashTimer)
+    set({ flash })
+    flashTimer = setTimeout(() => set({ flash: null }), FLASH_MS)
+  },
   phase: 'offline',
   level: 0,
   caption: '',
@@ -285,7 +311,6 @@ export const useStore = create<State>((set) => ({
   error: null,
   connected: [],
   voice: '',
-  gestures: false,
   looking: null,
   panels: [],
   blades: [],
@@ -296,7 +321,6 @@ export const useStore = create<State>((set) => ({
   ui: defaultUi(),
 
   setVoice: (voice) => set({ voice }),
-  setGestures: (gestures) => set({ gestures }),
   setLooking: (looking) => set({ looking }),
   setBootNote: (bootNote) => set({ bootNote }),
   setBootShort: (bootShort) => set({ bootShort }),
@@ -358,7 +382,10 @@ export const useStore = create<State>((set) => ({
   setLevel: (level) => set({ level }),
   setCaption: (caption) => set({ caption }),
   setActiveTool: (activeTool) => set({ activeTool }),
-  setError: (error) => set({ error }),
+  setError: (error) => {
+    set({ error })
+    if (error) useStore.getState().feel('alerta')
+  },
   setConnected: (connected) => set({ connected }),
   pushTurn: (turn) => set((s) => ({ turns: [...s.turns, turn] })),
   appendToLastTurn: (text) =>
@@ -423,6 +450,14 @@ export const useStore = create<State>((set) => ({
     }),
 }))
 
+/** What he is feeling, on top of what he is doing. See sphereMood.ts. */
+export type Feeling = 'foco' | 'aula' | 'prova' | 'acerto' | 'erro' | 'alerta'
+
+/** A moment passes by itself; what lasts is read from what is going on. */
+export function feelingNow(state: { flash: Feeling | null; lecture: Lecture | null; quizOn: boolean; timers: readonly Timer[] }): Feeling | null {
+  return state.flash ?? (state.lecture ? 'aula' : state.quizOn ? 'prova' : state.timers.length ? 'foco' : null)
+}
+
 /** Colour identity per phase — shared by the 3D scene and the 2D HUD. */
 export const phaseColor: Record<Phase, string> = {
   offline: '#64300f',
@@ -444,8 +479,8 @@ export const phaseColor: Record<Phase, string> = {
  * instead of being reimplemented either side of the canvas boundary. A blanket
  * accent wins over a per-phase override, which wins over the built-in map.
  */
-export function accentFor(phase: Phase, ui: UiState): string {
-  return ui.accent ?? ui.palette[phase] ?? phaseColor[phase]
+export function accentFor(phase: Phase, ui: UiState, feeling?: string | null): string {
+  return ui.accent ?? ui.palette[phase] ?? feeling ?? phaseColor[phase]
 }
 
 // Handy while dressing the scene for camera: in the dev server you can drive

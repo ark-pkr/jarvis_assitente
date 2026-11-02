@@ -1,4 +1,6 @@
 .mission-control { position: fixed; inset: 0; z-index: 8; pointer-events: none; color: #c4e9f5; font-family: 'Chakra Petch', 'Segoe UI', sans-serif; --ice: #84dfff; --edge: #3b778a66; }
+/* A blade lives inside the HUD, which sits below this. While one is open it has to win. */
+html:has(.blades-stack .bl) .mission-control { z-index: 3; }
 .mission-control * { box-sizing: border-box; }
 .mission-control button, .mission-control input, .mission-control select, .mission-control textarea { font: inherit; }
 .mission-control button { cursor: pointer; color: #bdeaff; border: 1px solid #3e718988; background: #0a2635; padding: 10px 14px; border-radius: 4px; transition: border-color .2s, background .2s; }

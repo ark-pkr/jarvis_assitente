@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { micBands } from '../lib/audio'
 import { easeBands, outputBands, SILENT, type Bands } from '../lib/voiceBands'
-import { useStore } from '../store'
+import { feelingNow, useStore } from '../store'
 import { BLACK_HOLE, VERTEX } from './holoShaders'
 import { DETAIL_LEVELS, nextQuality, pictureSize, SAMPLE_FRAMES } from './holoQuality'
-import { ACCENT, easeMood, MOODS, mix, parseColour, type Rgb } from './sphereMood'
+import { ACCENT, easeMood, feelingColour, MOODS, mix, moodFor, parseColour, type Rgb } from './sphereMood'
 
 /** Doing nothing does not need sixty frames, and the fan will thank it. */
 const RESTING_FRAME_MS = 33
@@ -85,15 +85,17 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
     gl.drawArrays(gl.TRIANGLES, 0, 3)
   }
   const follow = (seconds: number) => {
-    const { level: target, phase, ui } = useStore.getState()
-    const wanted = MOODS[phase]
+    const state = useStore.getState()
+    const { level: target, phase, ui } = state
+    const feeling = feelingNow(state)
+    const wanted = moodFor(phase, feeling)
     mood = easeMood(mood, wanted, seconds)
     turn += seconds * mood.spin * 1.6
     const hearing = phase === 'listening' || phase === 'speaking'
     level += ((hearing ? target : 0) - level) * (1 - Math.exp(-seconds * 12))
     bands = easeBands(bands, phase === 'speaking' ? outputBands() : phase === 'listening' ? micBands() : SILENT, seconds)
     // Asked for a colour, the whole disc takes it, thought included.
-    const chosen = parseColour(ui.reactor.color ?? ui.accent)
+    const chosen = parseColour(ui.reactor.color ?? ui.accent) ?? feelingColour(phase, feeling)
     if (ACCENT[phase]) tinted = ACCENT[phase]
     accent = mix(accent, chosen ?? ACCENT[phase] ?? tinted, .1)
     tint += ((chosen ? 1 : mood.tint) - tint) * (1 - Math.exp(-seconds * 5))
@@ -138,7 +140,7 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
   motion.addEventListener('change', motionChanged)
   document.addEventListener('visibilitychange', run)
   // Standing still, the picture only changes when the phase does.
-  const phaseChanged = useStore.subscribe((state, before) => { if (!raf && state.phase !== before.phase) { follow(1); draw() } })
+  const phaseChanged = useStore.subscribe((state, before) => { if (!raf && (state.phase !== before.phase || feelingNow(state) !== feelingNow(before))) { follow(1); draw() } })
 
   resize()
   run()

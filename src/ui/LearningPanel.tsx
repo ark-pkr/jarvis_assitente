@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useWorkspace } from '../workspace'
+import { LecturePanel } from './LecturePanel'
 
 const lessons = [
   ['logica', 'Lógica de programação', 'Variáveis, condições, repetições e resolução de problemas'],
@@ -35,6 +36,7 @@ export function LearningPanel({ send }: { send: (prompt: string) => void }) {
     </select></label>
     <label>Tempo por dia (minutos)<input aria-label="Minutos de estudo" type="number" min="10" max="240" step="10" value={learning.minutes} onChange={(event) => setLearning({ minutes: Math.max(10, Math.min(240, Number(event.target.value) || 10)) })} /></label>
     <label>Meu objetivo<input aria-label="Objetivo de aprendizagem" maxLength={500} value={learning.goal} onChange={(event) => setLearning({ goal: event.target.value })} placeholder="Ex.: criar um sistema de estoque e aprender ADS" /></label>
+    <LecturePanel send={send} />
     <h3>Aula com PDF e exemplos na tela</h3>
     <p>O JARVIS explica um conceito por vez, percorre exemplos de código e interpreta tabelas, fórmulas ou diagramas. No fim, pode oferecer um exercício opcional com pistas graduais.</p>
     <label>Pasta do PDF<input aria-label="Pasta do PDF" value={learning.pdfFolder} onChange={(event) => setLearning({ pdfFolder: event.target.value })} placeholder="C:\Users\seu-usuario\Documents\Aulas" /></label>

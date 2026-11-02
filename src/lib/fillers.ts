@@ -5,48 +5,22 @@
  * JARVIS says something the instant work starts — then goes quiet until he has
  * an answer. One acknowledgement, no progress chatter.
  *
- * The phrasing follows the character's actual grammar rather than generic
- * assistant-speak, which matters more than it sounds:
- *
- *   - Working lines are subjectless present participles: "Compiling.",
- *     "Cross-referencing." Not "I'm now checking" and never "let me".
- *   - There is no snap-to compliance formula. "Right away" and "At once" are
- *     not in his vocabulary; acknowledgement is deferential, not eager.
- *   - No filler words, no enthusiasm, no apology, no exclamation marks.
- *   - "Sir" fronted means urgency; final means routine. These are all routine,
- *     so it goes at the end, and only sometimes.
+ * Two registers. By default these are what a person says while reaching for
+ * something: short, a little loose, never a formula. The formal personality keeps
+ * the butler, where "sir" at the end is routine and fronted is urgent.
  */
 
 /** Said as soon as the first tool fires, before any answer exists. */
-const WORKING = [
-  'Cuidando disso, senhor.',
-  'Compilando.',
-  'Buscando os dados.',
-  'Acessando o arquivo.',
-  'Cruzando as informações.',
-  'Executando a consulta.',
-  'Pesquisando.',
-  'Em andamento.',
-]
+const WORKING = ['Deixa eu ver.', 'Hmm, deixa eu ver.', 'Só um instante.', 'Um segundo.', 'Já vejo isso.', 'Olhando aqui.', 'Deixa comigo.']
+const WORKING_FORMAL = ['Cuidando disso, senhor.', 'Buscando os dados.', 'Cruzando as informações.', 'Executando a consulta.', 'Em andamento.']
 
 /** Acknowledging an order where no tool is involved. */
-const ACKNOWLEDGE = [
-  'Como desejar, senhor.',
-  'Muito bem, senhor.',
-  'Certamente.',
-  'Entendido.',
-  'Pode deixar.',
-  'A seguir, senhor.',
-]
+const ACKNOWLEDGE = ['Beleza.', 'Fechado.', 'Pode deixar.', 'Tá bom.', 'Deixa comigo.']
+const ACKNOWLEDGE_FORMAL = ['Como desejar, senhor.', 'Muito bem, senhor.', 'Entendido.']
 
 /** Answering to his name, before the user has said what they want. */
-const ATTENTION = [
-  'Sim, senhor?',
-  'Senhor?',
-  'À sua disposição, senhor.',
-  'Aguardando.',
-  'Estou ouvindo, senhor.',
-]
+const ATTENTION = ['Oi?', 'Fala.', 'Pode falar.', 'Tô ouvindo.', 'Hm?']
+const ATTENTION_FORMAL = ['Sim, senhor?', 'À sua disposição, senhor.', 'Estou ouvindo, senhor.']
 
 /**
  * Avoids repeating the same phrase twice running, which is what makes canned
@@ -63,9 +37,18 @@ function makePicker(pool: string[]) {
   }
 }
 
-export const working = makePicker(WORKING)
-export const acknowledge = makePicker(ACKNOWLEDGE)
-export const attention = makePicker(ATTENTION)
+let formal = false
+/** Read from the personality at the start of each turn. */
+export const speakFormally = (on: boolean) => { formal = on }
+const register = (plain: string[], butler: string[]) => {
+  const pickPlain = makePicker(plain)
+  const pickButler = makePicker(butler)
+  return () => formal ? pickButler() : pickPlain()
+}
+
+export const working = register(WORKING, WORKING_FORMAL)
+export const acknowledge = register(ACKNOWLEDGE, ACKNOWLEDGE_FORMAL)
+export const attention = register(ATTENTION, ATTENTION_FORMAL)
 
 /**
  * Naming the task is warmer than a generic acknowledgement and shows the
@@ -131,7 +114,7 @@ const BY_TOOL: Rule[] = [
   {
     server: /elevenlabs|openai-tts/,
     tool: /speech|\bvoice\b|\btts\b|text_to_sound/,
-    lines: ['Sintetizando.', 'Cuidando disso, senhor.'],
+    lines: ['Sintetizando.', 'Deixa comigo.'],
   },
   {
     server: /spotify|sonos/,
@@ -141,7 +124,7 @@ const BY_TOOL: Rule[] = [
   {
     server: /^home|homeassistant|\bhue\b|\bhass\b/,
     tool: /\blights?\b|thermostat|\bdimmer\b/,
-    lines: ['Ajustando.', 'Cuidando disso, senhor.'],
+    lines: ['Ajustando.', 'Deixa comigo.'],
   },
   {
     server: /github|linear|jira|sentry/,

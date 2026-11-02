@@ -9,6 +9,8 @@ export class SpeechGate {
   private quiet = 0
   private voiced = 0
   private elapsed = 0
+  /** Speech already known to be under way, from a louder test than this one. */
+  begin(ms: number) { this.speaking = true; this.armed = 0; this.quiet = 0; this.voiced = ms; this.elapsed = ms }
   reset() { this.speaking = false; this.armed = 0; this.quiet = 0; this.voiced = 0; this.elapsed = 0 }
   feed(energy: number, ms: number, pauseMs: number): 'start' | 'end' | 'discard' | null {
     if (!this.calibrated) {

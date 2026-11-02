@@ -15,7 +15,7 @@ try {
   assert.equal(await page.getByRole('textbox', { name: 'Digite seu pedido' }).count(), 0)
   assert.equal(await page.locator('.scene-light').count(), 1)
   assert.equal(await page.locator('.holo-core-canvas, .neural-sphere-canvas').count(), 1)
-  assert.equal(await page.locator('.scene canvas, .hands-canvas').count(), 1)
+  assert.equal(await page.locator('.scene canvas').count(), 1)
   assert.equal(await page.evaluate(() => window.__testRecognition.lang), 'pt-BR')
   assert.equal(await page.evaluate(() => window.__testRecognition.maxAlternatives), 3)
   const settings = await page.evaluate(async () => (await import('/src/workspace.ts')).useWorkspace.getState().settings)

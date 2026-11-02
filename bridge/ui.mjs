@@ -506,6 +506,26 @@ export function uiServer(emit) {
         },
       ),
 
+      tool(
+        'ui_personality',
+        'Muda como ele fala quando o usuário pedir: formal, equilibrado, bem-humorado ou sarcastico. Vale a partir da próxima resposta e fica salvo.',
+        { value: z.enum(['formal', 'equilibrado', 'bem-humorado', 'sarcastico']).describe('A personalidade pedida.') },
+        async ({ value }) => {
+          emit('personality', { value })
+          return ok('Personalidade alterada.')
+        },
+      ),
+
+      tool(
+        'ui_initiative',
+        'Liga ou desliga ele puxar assunto sozinho, quando o usuário pedir. Quando desligado, ele só fala se for chamado.',
+        { on: z.boolean().describe('true para ele poder puxar assunto; false para nunca puxar.') },
+        async ({ on }) => {
+          emit('initiative', { on })
+          return ok(on ? 'Ele volta a puxar assunto.' : 'Ele não vai mais puxar assunto.')
+        },
+      ),
+
       tool('ui_reset', RESET_DESCRIPTION, {}, async () => {
         emit('reset', {})
         return ok('Interface restored.')

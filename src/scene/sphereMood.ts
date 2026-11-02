@@ -1,4 +1,4 @@
-import type { Phase } from '../store'
+import type { Feeling, Phase } from '../store'
 
 /**
  * What the sphere is doing, as numbers.
@@ -30,6 +30,8 @@ export const GOLD: Rgb = [255, 171, 78]
 /** Thought is the one cool colour on the gold interface, so it reads instantly. */
 const ICE: Rgb = [132, 214, 255]
 const MINT: Rgb = [116, 240, 196]
+/** Attention, warmer and paler than the gold it starts from. */
+const CREAM: Rgb = [255, 226, 170]
 
 const calm: Mood = { size: 1, spin: .1, glow: .55, tint: 0, ripple: 0, signals: 0, sweep: 0 }
 
@@ -44,7 +46,40 @@ export const MOODS: Record<Phase, Mood> = {
   speaking: { ...calm, spin: .22, glow: 1.1, ripple: 1 },
 }
 
-export const ACCENT: Partial<Record<Phase, Rgb>> = { thinking: ICE, tooling: MINT }
+export const ACCENT: Partial<Record<Phase, Rgb>> = { listening: CREAM, thinking: ICE, tooling: MINT }
+
+/**
+ * What he is feeling, laid over what he is doing.
+ *
+ * A phase changes every few seconds and a feeling lasts, so a feeling only sets what
+ * it cares about. Its colour never hides thought or a running tool, except a moment
+ * of alarm or of a right answer, which are over in a second or two anyway.
+ */
+type Shade = { colour: Rgb; tint: number; mood: Partial<Mood>; brief?: boolean }
+export const FEELINGS: Record<Feeling, Shade> = {
+  foco: { colour: [86, 138, 255], tint: .7, mood: { spin: .05, glow: .5 } },
+  aula: { colour: [176, 124, 255], tint: .7, mood: { spin: .07, glow: .55, size: 1.02 } },
+  prova: { colour: [84, 214, 226], tint: .6, mood: { spin: .16 } },
+  acerto: { colour: [92, 240, 140], tint: 1, mood: { glow: 1.5, spin: .5 }, brief: true },
+  erro: { colour: [255, 140, 70], tint: .9, mood: { glow: .75, spin: .08 }, brief: true },
+  alerta: { colour: [255, 54, 44], tint: 1, mood: { glow: 1.35, spin: .7, sweep: 1 }, brief: true },
+}
+
+export function moodFor(phase: Phase, feeling: Feeling | null): Mood {
+  const base = MOODS[phase]
+  const shade = feeling && FEELINGS[feeling]
+  if (!shade || (!shade.brief && ['thinking', 'tooling'].includes(phase))) return base
+  return { ...base, ...shade.mood, tint: Math.max(base.tint, shade.tint) }
+}
+
+/** The colour a feeling asks for just now, or null to leave the phase's own. */
+export function feelingColour(phase: Phase, feeling: Feeling | null): Rgb | null {
+  const shade = feeling && FEELINGS[feeling]
+  if (!shade || (!shade.brief && ['thinking', 'tooling'].includes(phase))) return null
+  return shade.colour
+}
+
+export const hexColour = (rgb: Rgb) => `#${rgb.map((value) => value.toString(16).padStart(2, '0')).join('')}`
 
 /** Moves `current` towards `target`, frame-rate independent. */
 export function easeMood(current: Mood, target: Mood, seconds: number): Mood {

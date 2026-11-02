@@ -46,6 +46,8 @@ export type VoiceHandlers = {
    *  `trailing` is whatever followed it, so "Jarvis, what's the weather" is
    *  one breath rather than two turns. */
   onWake: (trailing: string) => void
+  /** Whether plain speech may cut him off now, without his name. */
+  mayBarge?: () => boolean
   /** The user has genuinely started talking. This is the barge-in trigger. */
   onSpeechStart: () => void
   /** Live transcript, for the caption under the reactor. */
@@ -690,6 +692,12 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
   const mayLeave = () => segmentMaySend({ localWake: Boolean(localWake), heldText: Boolean(assemble.held()), addressedAtStart, addressedUntil, now: Date.now() })
 
   vad = await startVad({
+    mayBarge: h.mayBarge,
+    onBarge: () => {
+      addressedUntil = Date.now() + 30000
+      addressedAtStart = true
+      h.onSpeechStart()
+    },
     onStart: () => {
       const mode = h.mode()
       diag.mode = mode

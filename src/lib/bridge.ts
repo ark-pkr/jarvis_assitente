@@ -1,6 +1,7 @@
 import type { AskHandlers } from './anthropic'
 import type { Blade, Panel } from '../store'
 import { conversationContext, useWorkspace, flushWorkspace } from '../workspace'
+import { windowNote } from './windowContext'
 import { BRIDGE_WS_URL } from '../config'
 
 /**
@@ -28,6 +29,7 @@ type Frame = {
   delta?: string
   name?: string
   text?: string
+  value?: string
   message?: string
   panel?: Panel
   blade?: Blade
@@ -43,10 +45,14 @@ type Frame = {
 }
 
 export type Approval = { id: string; action: string; url: string; details: string; decide: (approved: boolean) => void }
-let onApproval: ((approval: Approval | null) => void) | undefined
+/** The card shows it and the voice loop asks it, so more than one is listening. */
+const approvalWatchers = new Set<(approval: Approval | null) => void>()
 export function watchApproval(handler: (approval: Approval | null) => void) {
-  onApproval = handler
-  return () => { onApproval = undefined }
+  approvalWatchers.add(handler)
+  return () => { approvalWatchers.delete(handler) }
+}
+export function showApproval(approval: Approval | null) {
+  for (const watcher of approvalWatchers) watcher(approval)
 }
 
 /** Every question gets an id so its answer can be told from anyone else's. */
@@ -190,12 +196,12 @@ function dispatch(ws: WebSocket) {
       const id = msg.id
       const decide = (approved: boolean) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'reply', id, approved }))
-        onApproval?.(null)
+        showApproval(null)
       }
-      if (onApproval) onApproval({ id, action: msg.action || 'Ação no navegador', url: msg.url || '', details: msg.details || '', decide })
+      if (approvalWatchers.size) showApproval({ id, action: msg.action || 'Ação no navegador', url: msg.url || '', details: msg.details || '', decide })
       else decide(false)
     } else if (msg.type === 'approval_cancel') {
-      onApproval?.(null)
+      showApproval(null)
     } else if (msg.type === 'ready') {
       // The bridge announces immediately on connect from Claude Code's config,
       // then again with live status once the agent initialises. Keep listening
@@ -301,7 +307,7 @@ function connect(): Promise<WebSocket> {
       )
     }
     ws.onclose = () => {
-      onApproval?.(null)
+      showApproval(null)
       // A close before open is just a failed dial; after open it's a lost
       // session, and the two want different handling.
       settle(new Error('O serviço local encerrou a conexão.'))
@@ -398,6 +404,7 @@ export async function ask(
   const tools: string[] = []
   let text = ''
 
+  const windowContext = await windowNote(prompt, useWorkspace.getState().settings.windowContext)
   return new Promise((resolve, reject) => {
     let done = false
     let timer = 0
@@ -464,6 +471,10 @@ export async function ask(
             handlers.onText(msg.delta ?? '')
             break
 
+          case 'tone':
+            if (msg.value) handlers.onTone?.(msg.value)
+            break
+
           case 'tool':
             if (!msg.name) break
             tools.push(msg.name)
@@ -500,7 +511,7 @@ export async function ask(
       const saved = conversationContext()
       // App has already added this question to the log. Send only prior turns.
       if (saved.context.at(-1)?.role === 'user' && saved.context.at(-1)?.text === prompt) saved.context.pop()
-      ws.send(JSON.stringify({ type: 'ask', text: prompt, id, ...saved, fast: request.fast, article: request.article, privacyMode: request.privacyMode }))
+      ws.send(JSON.stringify({ type: 'ask', text: prompt, id, ...saved, windowContext, fast: request.fast, article: request.article, privacyMode: request.privacyMode }))
     } catch (err) {
       // The socket can go into CLOSING between connect() resolving and here.
       fail(err instanceof Error ? err : new Error(String(err)))

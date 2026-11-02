@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useStore, type Blade } from '../store'
 import { BRIDGE_HTTP_URL } from '../config'
 import { openResearchLink, sanitisePanelHtml } from './sanitise'
-import { frameSpan, peaceScroll, pinchCount } from '../lib/hands'
 import * as camera from '../lib/camera'
 
 /**
@@ -261,41 +260,10 @@ function Card({
   /** Where the user has dragged it, relative to its slot. */
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const shell = useRef<HTMLDivElement>(null)
-  const body = useRef<HTMLDivElement>(null)
 
   /**
-   * Scroll whatever this blade is showing.
-   *
-   * Two destinations, because a blade holds two different kinds of thing. Its
-   * own overflow for markup and galleries; a postMessage for an article, since
-   * an iframe is a separate document that the parent cannot scroll directly —
-   * see the shim in bridge/page.mjs.
-   */
-  const scrollContent = (dy: number) => {
-    const el = body.current
-    if (!el) return
-    const frame = el.querySelector('iframe')
-    if (frame?.contentWindow) {
-      frame.contentWindow.postMessage({ jarvis: 'scroll', dy }, '*')
-    } else {
-      el.scrollTop += dy
-    }
-  }
-
-  /**
-   * Drag and resize both listen on `window`, and that is the whole trick.
-   *
-   * The obvious implementations do not work by hand. framer-motion's own drag
-   * tracks the pointer through internals we cannot reach, and the resize grip
-   * originally listened on the grip element — but the hand controller aims its
-   * synthetic events with elementFromPoint, and one pixel into a drag the
-   * element under the cursor is no longer the grip. So resizing by hand died on
-   * the first frame, and dragging never started at all.
-   *
-   * Listening on window fixes both for free: a synthetic event dispatched at
-   * whatever is under the cursor still bubbles to window, so these handlers see
-   * a hand and a mouse identically. Which is the property the gesture layer was
-   * designed around — one interaction, not two implementations of it.
+   * Drag and resize both listen on `window`: one pixel into a drag the pointer
+   * is usually no longer over the element that took the press.
    */
   const grab = (
     e: React.PointerEvent,
@@ -305,34 +273,9 @@ function Card({
     e.stopPropagation()
     const sx = e.clientX
     const sy = e.clientY
-    let baseX = sx
-    let baseY = sy
-    let dx = 0
-    let dy = 0
 
     const move = (ev: PointerEvent) => {
-      /**
-       * Both hands pinching means this is not a drag.
-       *
-       * One pinch is a grab. Two is somebody doing something two-handed, and
-       * whichever hand happened to press first should not be hauling the blade
-       * around underneath it — the result is a blade that lurches away while
-       * you are trying to do something else with both hands.
-       *
-       * Suppressed by re-anchoring rather than by returning early. A plain
-       * return would leave the origin where the press began, so the moment one
-       * hand released, the blade would leap by however far the other hand had
-       * travelled in the meantime. Moving the origin with the hand keeps the
-       * offset constant, so letting go of one hand simply resumes from here.
-       */
-      if (ev.pointerType === 'touch' && pinchCount() > 1) {
-        baseX = ev.clientX - dx
-        baseY = ev.clientY - dy
-        return
-      }
-      dx = ev.clientX - baseX
-      dy = ev.clientY - baseY
-      onMove(dx, dy)
+      onMove(ev.clientX - sx, ev.clientY - sy)
     }
     const done = () => {
       window.removeEventListener('pointermove', move)
@@ -353,106 +296,6 @@ function Card({
     const from = { ...pos }
     grab(e, (dx, dy) => setPos({ x: from.x + dx, y: from.y + dy }))
   }
-
-  /**
-   * Pinch anywhere on a blade to grab it.
-   *
-   * This used to scroll, and moving a blade was possible only by hitting the
-   * header — a strip 31 pixels tall. Asking someone to land a hand cursor on 31
-   * pixels is not an interaction, and since a pinch on the body scrolled
-   * instead, there was in practice no way to move a blade by hand at all.
-   *
-   * Grabbing is also what people try first: you see a thing and reach for it.
-   * So a pinch anywhere picks the blade up, and scrolling moves to a pose that
-   * is deliberate and hard to make by accident — two fingers, see the effect
-   * below. Only for 'touch', which is what the gesture layer dispatches; a mouse
-   * keeps its wheel and its ability to select text.
-   */
-  const onBodyDown = (e: React.PointerEvent) => {
-    if (e.pointerType !== 'touch') return
-    if (!focused) onFocus()
-    if (expanded) return
-    const from = { ...pos }
-    grab(e, (dx, dy) => setPos({ x: from.x + dx, y: from.y + dy }))
-  }
-
-  /**
-   * Two fingers up, moved up or down, scrolls the front blade.
-   *
-   * Reads a distance from hands.ts and decides here that it means scrolling —
-   * the tracker publishes the pose, not the consequence.
-   */
-  useEffect(() => {
-    if (!focused) return
-    let raf = 0
-    let last: number | null = null
-    const tick = () => {
-      raf = requestAnimationFrame(tick)
-      const travelled = peaceScroll()
-      if (travelled === null) {
-        last = null
-        return
-      }
-      if (last === null) {
-        last = travelled
-        return
-      }
-      // Inverted and amplified: pulling your hand up moves you down the page,
-      // and a hand does not have the travel a scroll wheel does.
-      scrollContent((last - travelled) * 2.4)
-      last = travelled
-    }
-    tick()
-    return () => cancelAnimationFrame(raf)
-  }, [focused])
-
-  /**
-   * Frame the blade with both hands to resize it.
-   *
-   * Index up, thumb out, one hand either side — the rectangle people already
-   * mime when they frame a shot. Pull the corners apart and the blade grows;
-   * bring them together and it shrinks; lean toward the camera and it grows
-   * too, because leaning in enlarges everything about the hands including the
-   * gap between them.
-   *
-   * This replaced a two-handed pinch, which read well on paper and collided
-   * badly in practice: a pinch is how you GRAB a blade, so two of them meant
-   * two hands each trying to pick something up while also asking to resize it.
-   * The framing pose collides with nothing, which is most of why it is right.
-   *
-   * The measurement arrives as a plain distance; that it means a resize is
-   * decided here. Only the focused blade, and never while expanded, where the
-   * size is the entire point of the state.
-   */
-  useEffect(() => {
-    if (!focused || expanded) return
-    let raf = 0
-    let from: { span: number; w: number; h: number } | null = null
-    const tick = () => {
-      raf = requestAnimationFrame(tick)
-      const span = frameSpan()
-      if (span === null) {
-        from = null
-        return
-      }
-      const box = shell.current?.getBoundingClientRect()
-      if (!box) return
-      if (!from) {
-        // Both hands have just closed. Anchor on the size as it is now.
-        from = { span, w: box.width, h: box.height }
-        return
-      }
-      // Guard the divisor: hands almost touching would send the scale to
-      // infinity and the blade off the screen in one frame.
-      const k = span / Math.max(from.span, 40)
-      setSize({
-        w: Math.max(280, Math.min(window.innerWidth * 0.96, from.w * k)),
-        h: Math.max(180, Math.min(window.innerHeight * 0.94, from.h * k)),
-      })
-    }
-    tick()
-    return () => cancelAnimationFrame(raf)
-  }, [focused, expanded])
 
   const onGrip = (e: React.PointerEvent) => {
     const box = shell.current?.getBoundingClientRect()
@@ -513,9 +356,6 @@ function Card({
           ...(size && !expanded ? { width: size.w, height: size.h } : null),
           transform: expanded ? undefined : `translate(${pos.x}px, ${pos.y}px)`,
         }}
-        // pointerdown, not mousedown: a hand dispatches PointerEvents, and a
-        // mousedown handler simply never hears them. Focusing a blade by pinch
-        // was silently impossible until this changed.
         onPointerDown={() => {
           if (!focused) onFocus()
         }}
@@ -565,7 +405,7 @@ function Card({
           </span>
         </header>
 
-        <div className="bl-body" ref={body} onPointerDown={onBodyDown}>
+        <div className="bl-body">
           <Body blade={blade} />
         </div>
 
