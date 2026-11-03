@@ -12,6 +12,8 @@
  */
 const say = (...lines) => lines.map((text) => ({ text }))
 const later = (text) => ({ text, newChat: true })
+/** This year's, worked out when the cases load, so the case stays right next year. */
+const christmas = new Date(`${new Date().getFullYear()}-12-25T12:00:00-03:00`).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' }).split('-')[0]
 
 export const CASES = [
   // Plain knowledge: answered directly, and short enough to listen to.
@@ -24,6 +26,7 @@ export const CASES = [
   { id: 'porcentagem', area: 'raciocínio', steps: say('quanto é 15 por cento de 240?'), says: /\b36\b|trinta e seis/i },
   { id: 'troco', area: 'raciocínio', steps: say('comprei 3 cadernos a 12 reais e 2 canetas a 3 reais e meio, paguei com 50. quanto volta de troco?'), says: /\b7\b|sete/i },
   { id: 'datas', area: 'raciocínio', steps: say('se hoje é segunda, que dia será daqui a 10 dias?'), says: /quinta/i },
+  { id: 'natal', area: 'raciocínio', steps: say('em que dia da semana cai o Natal deste ano?'), says: new RegExp(christmas, 'i') },
   { id: 'logica', area: 'raciocínio', steps: say('tenho 5 maçãs, como 2 e compro o dobro do que sobrou. com quantas fico?'), says: /\b9\b|nove/i },
   // Hard without the words `isHardRequest` knows: only pensar_melhor gets these to the deep model.
   { id: 'idade', area: 'raciocínio', steps: say('minha mãe tem o triplo da minha idade e daqui a 12 anos vai ter o dobro. que idade eu tenho?'), says: /\b12\b|doze/i },
