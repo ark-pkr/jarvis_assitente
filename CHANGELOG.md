@@ -1,5 +1,22 @@
 # Histórico de versões
 
+## 1.10.0
+
+**Respostas mais confiáveis**
+- Não diz que fez o que não fez: se ele começar a dizer “pronto, salvei” sem ter salvo nada, a frase é barrada antes de ser falada e a resposta é refeita.
+- Só cita livros, filmes e séries que existem, com o autor certo. Na dúvida, confere na internet ou não cita.
+- Quando você pede uma escolha, a escolha vem logo nas primeiras palavras, sem “depende”.
+- “O que eu tenho na quinta?” responde com o que você contou, mesmo com a Google Agenda desconectada.
+
+**Mais rápido para ouvir**
+- Antes de pensar mais numa pergunta difícil, ele avisa: “Deixa eu pensar.”
+- Em conversas longas, o começo vira um resumo em vez de ser reenviado inteiro a cada pergunta. As últimas mensagens continuam completas.
+- `npm run metrics` mostra onde o tempo das respostas lentas vai: modelo, ferramentas ou espera pela sua aprovação.
+
+**Prova de inteligência**
+- Outro modelo julga as respostas por um critério escrito, onde uma palavra não basta para corrigir.
+- `--vezes=3` roda cada pedido três vezes. E há pedidos novos mais difíceis: pegadinhas, conversa longa, mudança de ideia, pedido ambíguo e conselho perigoso.
+
 ## 1.9.0
 
 **Visual**
