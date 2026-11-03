@@ -84,7 +84,7 @@ $1
 
 **Busca nos seus arquivos.** Diga “indexa a pasta de estudos” e, depois, pergunte “onde falei sobre juros?”. Ele acha o trecho pelo significado e cita o arquivo e a página. O índice fica neste computador, mas o texto dos arquivos vai ao Google para gerá-lo, por isso cada pasta pede confirmação. Use só nas pastas autorizadas.
 
-**Prova de inteligência.** `npm run test:intelligence -- nome` mede as respostas em uma lista de pedidos reais, com dados temporários, e compara com a última medição. Acrescente seus pedidos em `scripts/eval-cases.mjs`. Cada rodada consome a cota do Gemini.
+**Prova de inteligência.** `npm run test:intelligence -- nome` mede as respostas em uma lista de pedidos reais, com dados temporários, e compara com a última medição. Onde uma palavra não basta para corrigir, outro modelo julga a resposta por um critério escrito. Com `--vezes=3`, cada pedido roda três vezes, para separar melhora de sorte. Acrescente seus pedidos em `scripts/eval-cases.mjs`. Cada rodada consome a cota do Gemini.
 
 **Lembretes e timer.** Na hora marcada aparece a notificação do Windows e ele fala em voz alta, assim que terminar o que estiver dizendo. Lembretes de mais de dez minutos atrás ficam só na notificação. Podem se repetir: “me lembra toda segunda às sete”. “Foco de 25 minutos” mostra a contagem na tela e começa a pausa sozinho. O JARVIS precisa estar aberto.
 
@@ -136,6 +136,7 @@ Depois disso, diga “o que tenho amanhã?” ou “marca dentista sexta às 15h
 - **Voz muda de repente:** a cota de voz neural acabou. Frases curtas já faladas continuam com a voz neural, e o resto usa a voz do Windows até a cota voltar.
 - **Logs:** ficam em `%APPDATA%\JARVIS\desktop.log`. Para relatar um problema, use **Conexões → Copiar diagnóstico**.
 - **Consumo:** cada turno grava tokens e tempos, sem conteúdo, em `%APPDATA%\JARVIS\dados\metrics.jsonl`.
+- **Respostas lentas:** `npm run metrics` mostra quanto ele demora até a primeira palavra e, nas respostas lentas, onde o tempo foi: no modelo, nas ferramentas ou esperando sua aprovação.
 
 ## Desenvolvimento
 
