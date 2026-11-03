@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Assistente pessoal por voz para Windows, em português do Brasil, com interface holográfica.",
   "license": "MIT",
   "type": "module",
@@ -43,6 +43,7 @@
     "test:approval": "node scripts/check-approval-voice.mjs",
     "test:hold": "node scripts/check-hold-approval.mjs",
     "test:backup": "node scripts/check-backup.mjs",
+    "test:visual": "node scripts/check-visual.mjs",
     "test:intelligence": "node scripts/eval-intelligence.mjs",
     "test:modes": "node scripts/check-modes.mjs",
     "test:studio": "node bridge/studio.test.mjs"

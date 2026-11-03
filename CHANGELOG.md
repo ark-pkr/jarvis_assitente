@@ -1,5 +1,17 @@
 # Histórico de versões
 
+## 1.9.0
+
+**Visual**
+- Câmera viva: o buraco negro acompanha o mouse, com profundidade.
+- Estrelas que reagem à voz: sua fala puxa as estrelas para o disco, e a dele empurra para fora.
+- Planetas em órbita do buraco negro, com lente gravitacional: atrás dele viram arcos, na frente viram silhuetas. Sua fala os puxa para perto, a dele os afasta, e cada um brilha com uma parte da voz. Enquanto ele pensa, aceleram e pegam a cor do raciocínio.
+- Sons de interface discretos em botões, painéis e troca de modo.
+- Modo cinema: tela cheia só com o buraco negro e a legenda. Tecla **C**, botão em **Áudio** ou “modo cinema” por voz. Sai com **C** ou **Esc**.
+- Mini JARVIS: a bolinha do canto agora é só um pequeno buraco negro animado, sem fundo. Cliques fora dele passam para o que estiver atrás.
+
+Câmera, estrelas, planetas e sons podem ser desligados em **Áudio**.
+
 ## 1.8.0
 
 **Seus dados protegidos**

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useWorkspace, type HeliosSettings } from '../workspace'
 import { accentFor, feelingNow, useStore } from '../store'
+import { useCinema } from '../lib/cinema'
 import { feelingColour, hexColour } from './sphereMood'
 import { NeuralSphere } from './NeuralSphere'
 import { HoloCore } from './HoloCore'
@@ -96,7 +97,8 @@ export function Scene() {
   }, [visualTheme])
   // Cinema means the hologram alone, and our own chrome sits above the iframe
   // where the setting inside it cannot reach.
-  const cinema = useWorkspace((state) => state.settings.visualTheme === 'helios' && state.settings.helios.cinema)
+  const heliosCinema = useWorkspace((state) => state.settings.visualTheme === 'helios' && state.settings.helios.cinema)
+  const cinema = useCinema((state) => state.on) || heliosCinema
   useEffect(() => {
     document.documentElement.toggleAttribute('data-cinema', cinema)
     return () => document.documentElement.removeAttribute('data-cinema')

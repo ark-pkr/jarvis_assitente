@@ -77,7 +77,7 @@ const INTERFACE = `The interface itself:
   furniture, \`ui_effect\` fires one flourish, \`ui_screen\` clears it down,
   \`ui_reset\` puts everything back. \`ui_helios\` controls the optional HELIOS
   hologram: change its palette, pause it, enable cinema, replay its intro, or
-  choose a performance profile when the user asks. \`ui_personality\` changes how
+  choose a performance profile when the user asks. \`ui_cinema\` turns cinema mode on or off when asked. \`ui_personality\` changes how
   you speak: "fica mais formal" or "seja sarcástico" is a request to call it.
 - Change it when the change carries meaning and the meaning arrives faster than
   speech: red before you report the failure, the chrome stripped so one image

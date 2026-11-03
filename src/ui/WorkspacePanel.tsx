@@ -13,6 +13,8 @@ import { VoiceIdentitySettings } from './VoiceIdentitySettings'
 import { BackupPanel } from './BackupPanel'
 import { DiagnosticButton } from './DiagnosticButton'
 import { automaticBackup } from '../lib/backup'
+import { setCinema } from '../lib/cinema'
+import { interfaceCue, watchInterfaceSounds } from '../lib/uiSounds'
 
 /** Longer than any click, and short enough not to annoy anyone who means it. */
 const HOLD_TO_APPROVE_MS = 800
@@ -53,6 +55,9 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
   }, [approval])
   useEffect(() => { setMemory(workspace.memory) }, [workspace.memory])
   useEffect(() => { const timer = setTimeout(automaticBackup, BACKUP_AFTER_MS); return () => clearTimeout(timer) }, [])
+  useEffect(watchInterfaceSounds, [])
+  const wasOpen = useRef(false)
+  useEffect(() => { if (open !== wasOpen.current) interfaceCue(open ? 'open' : 'close'); wasOpen.current = open }, [open])
   const active = workspace.sessions.find((session) => session.id === workspace.active)
   const ready = phase !== 'offline' && phase !== 'boot'
   const stop = () => { onStop(); flushWorkspace() }
@@ -135,6 +140,12 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         </label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.holoCore} onChange={(event) => workspace.setSettings({ holoCore: event.target.checked })} />Buraco negro pela placa de vídeo</label>
         <p>A nitidez se ajusta sozinha ao seu computador. Desmarque para voltar à esfera simples.</p>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.liveCamera} onChange={(event) => workspace.setSettings({ liveCamera: event.target.checked })} />Câmera viva: o buraco negro acompanha o mouse</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.reactiveStars} onChange={(event) => workspace.setSettings({ reactiveStars: event.target.checked })} />Estrelas que reagem à voz</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.orbitingPlanets} onChange={(event) => workspace.setSettings({ orbitingPlanets: event.target.checked })} />Planetas em órbita que reagem à voz</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.uiSounds} onChange={(event) => workspace.setSettings({ uiSounds: event.target.checked })} />Sons de interface</label>
+        <button onClick={() => { setOpen(false); setCinema(true) }}>Modo cinema</button>
+        <p>Tela cheia só com o buraco negro e a legenda. Atalho: <b>C</b>. Para sair: <b>C</b> ou <b>Esc</b>. Por voz: “modo cinema”.</p>
         <p>A esfera neural e o reator circular usam os visuais leves. O HELIOS abre o reator cinematográfico integrado à conversa e aos comandos de voz, sem pedir acesso adicional ao microfone.</p>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.helios.introOnStartup} onChange={(event) => workspace.setSettings({ helios: { introOnStartup: event.target.checked } })} />Reproduzir abertura cinematográfica ao iniciar o HELIOS</label>
         <label>Qualidade do HELIOS

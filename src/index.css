@@ -1021,9 +1021,11 @@ kbd {
 /* The floating orb: a transparent window holding nothing but the sphere. */
 html[data-mini], html[data-mini] body, html[data-mini] #root { background: transparent !important; overflow: hidden; }
 html[data-mini] body::after { display: none; }
-.mini-orb { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 0; border: 0; background: none; color: #ffe4ae; cursor: pointer; font: 11px 'Chakra Petch', 'Segoe UI', sans-serif; }
-.mini-orb .neural-sphere-canvas { position: static; width: 190px; height: 190px; }
-.mini-label { max-width: 178px; padding: 3px 10px; overflow: hidden; border-radius: 10px; background: #0b0705d9; text-overflow: ellipsis; white-space: nowrap; }
+.mini-orb { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 0; border: 0; background: none; color: #ffe4ae; cursor: pointer; font: 10px 'Chakra Petch', 'Segoe UI', sans-serif; opacity: .9; pointer-events: none; }
+.mini-hit { position: absolute; top: 28px; left: 50%; width: 76px; height: 76px; margin-left: -38px; border-radius: 50%; pointer-events: auto; }
+.mini-orb .neural-sphere-canvas { position: static; width: 126px; height: 126px; }
+.mini-orb .holo-core-canvas { position: static; flex: none; width: 180px; height: 126px; }
+.mini-label { max-width: 172px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 0 3px #000, 0 1px 2px #000; }
 .mini-label:empty { display: none; }
 
 /* Above mission control, which is z-index 8 and otherwise sits on the title. */

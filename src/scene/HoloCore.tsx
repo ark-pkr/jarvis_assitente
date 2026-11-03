@@ -2,13 +2,20 @@ import { useEffect, useRef } from 'react'
 import { micBands } from '../lib/audio'
 import { easeBands, outputBands, SILENT, type Bands } from '../lib/voiceBands'
 import { feelingNow, useStore } from '../store'
+import { useWorkspace } from '../workspace'
 import { BLACK_HOLE, VERTEX } from './holoShaders'
 import { DETAIL_LEVELS, nextQuality, pictureSize, SAMPLE_FRAMES } from './holoQuality'
+import { PLANETS, planetsAt } from './planets'
 import { ACCENT, easeMood, feelingColour, MOODS, mix, moodFor, parseColour, type Rgb } from './sphereMood'
 
 /** Doing nothing does not need sixty frames, and the fan will thank it. */
 const RESTING_FRAME_MS = 33
 const NEUTRAL: Rgb = [255, 171, 78]
+/** How far the mouse swings the camera: wide around, barely up and down, where the disc changes shape. */
+const LOOK_AROUND = .14
+const LOOK_UP = .05
+/** The small window has to fit the whole disc across its width. */
+const MIRROR_ZOOM = .9
 
 function program(gl: WebGL2RenderingContext) {
   const made = gl.createProgram()
@@ -25,8 +32,8 @@ function program(gl: WebGL2RenderingContext) {
   return made
 }
 
-function start(canvas: HTMLCanvasElement, active: boolean) {
-  const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, powerPreference: 'high-performance' })
+function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
+  const gl = canvas.getContext('webgl2', { alpha: mirror, premultipliedAlpha: true, antialias: false, depth: false, powerPreference: 'high-performance' })
   if (!gl) throw new Error('sem WebGL2')
   const begun = performance.now()
   const made = program(gl)
@@ -38,10 +45,15 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
   gl.enableVertexAttribArray(0)
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
 
-  const names = ['uTime', 'uTurn', 'uGlow', 'uZoom', 'uTint', 'uLevel', 'uBass', 'uMid', 'uTreble', 'uRipple', 'uThought', 'uSweep']
+  const names = ['uTime', 'uTurn', 'uGlow', 'uZoom', 'uTint', 'uLevel', 'uBass', 'uMid', 'uTreble', 'uRipple', 'uThought', 'uSweep', 'uPush', 'uBare']
   const places = Object.fromEntries(names.map((name) => [name, gl.getUniformLocation(made, name)]))
   const resolution = gl.getUniformLocation(made, 'uResolution')
   const accentPlace = gl.getUniformLocation(made, 'uAccent')
+  const lookPlace = gl.getUniformLocation(made, 'uLook')
+  const planetPlace = gl.getUniformLocation(made, 'uPlanets')
+  const planetVoicePlace = gl.getUniformLocation(made, 'uPlanetVoice')
+  gl.uniform3fv(gl.getUniformLocation(made, 'uPlanetDeep'), PLANETS.flatMap((world) => world.deep.map((part) => part / 255)))
+  gl.uniform3fv(gl.getUniformLocation(made, 'uPlanetPale'), PLANETS.flatMap((world) => world.pale.map((part) => part / 255)))
 
   let quality = 0
   let raf = 0
@@ -56,6 +68,11 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
   let tint = 0
   let scale = 1
   let sample: number[] = []
+  let aim = { x: 0, y: 0 }
+  let look = { x: 0, y: 0 }
+  let push = 0
+  let gather = 0
+  let presence = 0
   let reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   const resize = () => {
@@ -72,7 +89,7 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
     number('uTurn', turn)
     number('uGlow', .5 + mood.glow * .55)
     // Below 1 the mood leans in towards the speaker; the camera does the leaning.
-    number('uZoom', scale / mood.size)
+    number('uZoom', scale / mood.size * (mirror ? MIRROR_ZOOM : 1))
     number('uTint', tint)
     number('uLevel', level)
     number('uBass', bands.bass)
@@ -81,6 +98,11 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
     number('uRipple', mood.ripple)
     number('uThought', Math.min(1, mood.signals / 16))
     number('uSweep', mood.sweep)
+    number('uPush', push)
+    number('uBare', mirror ? 1 : 0)
+    gl.uniform4fv(planetPlace, planetsAt(turn, gather, presence, bands))
+    gl.uniform1fv(planetVoicePlace, PLANETS.map((world) => bands[world.voice]))
+    gl.uniform2f(lookPlace, look.x * LOOK_AROUND, -look.y * LOOK_UP)
     gl.uniform3f(accentPlace, accent[0] / 255, accent[1] / 255, accent[2] / 255)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
   }
@@ -93,7 +115,22 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
     turn += seconds * mood.spin * 1.6
     const hearing = phase === 'listening' || phase === 'speaking'
     level += ((hearing ? target : 0) - level) * (1 - Math.exp(-seconds * 12))
-    bands = easeBands(bands, phase === 'speaking' ? outputBands() : phase === 'listening' ? micBands() : SILENT, seconds)
+    // The small window has neither the microphone nor the voice, only the level it is sent.
+    const heard = mirror ? (hearing ? { bass: level * .7, mid: level * .5, treble: level * .4 } : SILENT) : phase === 'speaking' ? outputBands() : phase === 'listening' ? micBands() : SILENT
+    bands = easeBands(bands, heard, seconds)
+    const { liveCamera, reactiveStars, orbitingPlanets } = useWorkspace.getState().settings
+    const toward = liveCamera && !mirror ? aim : { x: 0, y: 0 }
+    const settling = 1 - Math.exp(-seconds * 2.5)
+    look = { x: look.x + (toward.x - look.x) * settling, y: look.y + (toward.y - look.y) * settling }
+    // Your voice pulls the stars in, and his pushes them out.
+    const pull = phase === 'listening' ? level : phase === 'speaking' ? -level : 0
+    const easing = 1 - Math.exp(-seconds * 6)
+    push += ((reactiveStars && !mirror ? pull : 0) - push) * easing
+    // The worlds answer the same way, and the small window has no room for them.
+    gather += (pull - gather) * easing
+    const showing = orbitingPlanets && !mirror ? 1 : 0
+    presence += (showing - presence) * (1 - Math.exp(-seconds * 3))
+    if (!showing && presence < .01) presence = 0
     // Asked for a colour, the whole disc takes it, thought included.
     const chosen = parseColour(ui.reactor.color ?? ui.accent) ?? feelingColour(phase, feeling)
     if (ACCENT[phase]) tinted = ACCENT[phase]
@@ -116,14 +153,14 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
     const gap = previous ? now - previous : RESTING_FRAME_MS
     const phase = useStore.getState().phase
     const resting = phase === 'offline' || phase === 'dormant'
-    if (resting && gap < RESTING_FRAME_MS - 2) return
+    if ((resting || mirror) && gap < RESTING_FRAME_MS - 2) return
     previous = now
     const seconds = Math.min(gap / 1000, .1)
     elapsed += seconds
     follow(seconds)
     draw()
     // Only a frame that was asked for at full speed says anything about the GPU.
-    if (!resting && !document.hidden) measure(gap)
+    if (!resting && !mirror && !document.hidden) measure(gap)
   }
   const run = () => {
     cancelAnimationFrame(raf)
@@ -135,6 +172,10 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
   }
   const observer = new ResizeObserver(() => { resize(); if (!raf) draw() })
   observer.observe(canvas)
+  const aimAt = (event: PointerEvent) => { aim = { x: event.clientX / innerWidth * 2 - 1, y: event.clientY / innerHeight * 2 - 1 } }
+  const aimAhead = () => { aim = { x: 0, y: 0 } }
+  window.addEventListener('pointermove', aimAt, { passive: true })
+  document.documentElement.addEventListener('mouseleave', aimAhead)
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
   const motionChanged = () => { reducedMotion = motion.matches; run() }
   motion.addEventListener('change', motionChanged)
@@ -147,6 +188,8 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
   return () => {
     cancelAnimationFrame(raf)
     observer.disconnect()
+    window.removeEventListener('pointermove', aimAt)
+    document.documentElement.removeEventListener('mouseleave', aimAhead)
     motion.removeEventListener('change', motionChanged)
     document.removeEventListener('visibilitychange', run)
     phaseChanged()
@@ -154,7 +197,7 @@ function start(canvas: HTMLCanvasElement, active: boolean) {
 }
 
 /** The whole window, behind everything. A failure hands back to the simple sphere. */
-export function HoloCore({ active, onFailure }: { active: boolean; onFailure: () => void }) {
+export function HoloCore({ active, onFailure, mirror = false }: { active: boolean; onFailure: () => void; mirror?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -163,12 +206,12 @@ export function HoloCore({ active, onFailure }: { active: boolean; onFailure: ()
     const lost = (event: Event) => { event.preventDefault(); onFailure() }
     element.addEventListener('webglcontextlost', lost)
     let stop = () => {}
-    try { stop = start(element, active) } catch (error) {
+    try { stop = start(element, active, mirror) } catch (error) {
       console.warn('[jarvis] holograma indisponível:', error)
       onFailure()
     }
     return () => { stop(); element.removeEventListener('webglcontextlost', lost) }
-  }, [active, onFailure])
+  }, [active, onFailure, mirror])
 
   return <canvas ref={canvas} className="holo-core-canvas" aria-hidden="true" />
 }

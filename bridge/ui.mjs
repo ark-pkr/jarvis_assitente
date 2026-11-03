@@ -526,6 +526,16 @@ export function uiServer(emit) {
         },
       ),
 
+      tool(
+        'ui_cinema',
+        'Liga ou desliga o modo cinema quando o usuário pedir: tela cheia só com o buraco negro e a legenda.',
+        { on: z.boolean().describe('true para entrar no modo cinema; false para sair.') },
+        async ({ on }) => {
+          emit('cinema', { on })
+          return ok(on ? 'Modo cinema ligado.' : 'Modo cinema desligado.')
+        },
+      ),
+
       tool('ui_reset', RESET_DESCRIPTION, {}, async () => {
         emit('reset', {})
         return ok('Interface restored.')

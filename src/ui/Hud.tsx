@@ -7,6 +7,7 @@ import { Suggestions } from './Suggestions'
 import { BladeSweep, Blades } from './Blades'
 import { Effects } from './Effects'
 import { useWorkspace } from '../workspace'
+import { useCinema } from '../lib/cinema'
 
 const statusText: Record<Phase, string> = {
   offline: 'DESLIGADO',
@@ -168,6 +169,7 @@ export function Hud() {
   const looking = useStore((s) => s.looking)
   const caption = useStore((s) => s.caption)
   const ui = useStore((s) => s.ui)
+  const cinema = useCinema((s) => s.on)
 
   // accentFor folds JARVIS's overrides in over the phase colour, so one
   // variable on the root carries a theme change into every .hud-* rule without
@@ -303,6 +305,8 @@ export function Hud() {
       {caption && caption !== '…' && <div className="live-caption" role="status">{caption}</div>}
 
       {error && <div className="error" role="alert">{error}</div>}
+
+      {cinema && <div className="cinema-hint"><kbd>C</kbd> ou <kbd>Esc</kbd> para sair</div>}
 
       {phase !== 'offline' && <footer className="hud-bottom">
         <span className="hint">

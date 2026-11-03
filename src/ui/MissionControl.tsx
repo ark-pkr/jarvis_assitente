@@ -3,6 +3,7 @@ import { useWorkspace } from '../workspace'
 import { useStore, type Phase } from '../store'
 import { BRIDGE_HTTP_URL } from '../config'
 import { openResearchLink, sanitisePanelHtml } from './sanitise'
+import { interfaceCue } from '../lib/uiSounds'
 import './mission-control.css'
 
 type Root = { id: string; name: string; path: string }
@@ -69,7 +70,7 @@ export function MissionControl({ send }: { send: (prompt: string) => void }) {
   const update = (values: Partial<Draft>) => setDraft((previous) => ({ ...previous, ...values }))
   const lessonPrompt = useMemo(() => `Modo professor. ${learning.pdfFile ? `Material: ${JSON.stringify(learning.pdfFile)}, pasta ${JSON.stringify(learning.pdfFolder)}, páginas ${learning.pageFrom} a ${learning.pageTo}. Use project_open se necessário e lesson_pdf_read antes de explicar; peça includeImages=true para tabelas, fórmulas, diagramas, colunas ou extração confusa.` : 'Ainda não escolhi um PDF; ensine o tema de estudo configurado ou pergunte o assunto.'} Nível: ${learning.level}. Objetivo: ${learning.goal || 'aprender programação e análise de sistemas'}. Explique um conceito por vez, cite a página junto de cada ideia da fonte, diferencie fonte de exemplos criados, e admita texto ou diagramas ilegíveis em vez de adivinhar. Em código, mostre um exemplo comentado quando útil, resultado esperado e explicação passo a passo. Em tabelas, explique cabeçalhos, unidades, linhas relevantes e relações. Use painéis legíveis e ofereça exercício opcional ao final; se aceito, dê só uma pista por vez e espere a tentativa.`, [learning])
   return <div className="mission-control" data-mode={mode} data-has-conversation={turns.length > 0} data-side-panels={settings.sidePanelsVisible}>
-    <nav className="mode-switch" aria-label="Modos do JARVIS">{modes.map((item) => <button key={item.id} aria-pressed={mode === item.id} onClick={() => workspace.setSettings({ mode: item.id, lightVisuals: true })}><span>{item.index}</span><div><b>{item.label}</b><small>{item.description}</small></div></button>)}</nav>
+    <nav className="mode-switch" aria-label="Modos do JARVIS">{modes.map((item) => <button key={item.id} aria-pressed={mode === item.id} onClick={() => { interfaceCue('mode'); workspace.setSettings({ mode: item.id, lightVisuals: true }) }}><span>{item.index}</span><div><b>{item.label}</b><small>{item.description}</small></div></button>)}</nav>
     <div className="mission-kicker"><span>JARVIS / AMBIENTE PESSOAL</span><span>{selectedMode.label.toUpperCase()}</span><span className="mission-live">● {service ? 'SERVIÇO CONECTADO' : 'CONECTANDO AO SERVIÇO'}</span></div>
     {mode === 'assistente' ? <div className="assistant-deck">
       <aside className="mission-column mission-left">

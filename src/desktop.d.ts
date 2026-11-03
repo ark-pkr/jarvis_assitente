@@ -8,6 +8,7 @@ interface Window {
     saveSettings: (values: { apiKey?: string; model?: string; startOnLogin?: boolean; contextReminders?: boolean; autoActivate?: boolean; clapToStart?: boolean; miniOrb?: boolean; hotkey?: string; localWake?: boolean; wakeKey?: string }) => Promise<void>
     openExternal: (url: string) => Promise<void>
     copyText: (text: string) => Promise<void>
+    setFullScreen: (on: boolean) => Promise<void>
     voiceIdentityStatus: () => Promise<{ configured: boolean; enrolled: boolean }>
     voiceIdentityMaterial: () => Promise<{ accessKey: string; profile: string } | null>
     saveVoiceIdentity: (values: { accessKey: string; profile: string }) => Promise<void>
@@ -16,6 +17,8 @@ interface Window {
     onHotkey: (handler: () => void) => () => void
     publishState: (state: { phase: string; level: number; caption: string; looking: string }) => void
     onMiniState: (handler: (state: { phase: string; level: number; caption: string; looking: string }) => void) => () => void
+    onMiniVisible: (handler: (visible: boolean) => void) => () => void
+    miniMouse: (inside: boolean) => Promise<void>
     openMain: () => Promise<void>
     requestAttention: () => Promise<void>
     releaseAttention: () => Promise<void>

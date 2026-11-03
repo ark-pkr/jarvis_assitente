@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DETAIL_LEVELS, MAX_WIDTH, nextQuality, pictureSize, SAMPLE_FRAMES } from '../src/scene/holoQuality.ts'
 import { bandsFrom, easeBands, SILENT } from '../src/lib/voiceBands.ts'
+import { orbitRate, PLANETS, planetsAt } from '../src/scene/planets.ts'
 
 const frames = (ms, count = SAMPLE_FRAMES) => Array.from({ length: count }, () => ms)
 /** A spectrum with energy only around one frequency, as an analyser reports it. */
@@ -64,4 +65,56 @@ test('the light rises with a sound faster than it falls away', () => {
   const up = easeBands(SILENT, { bass: 1, mid: 1, treble: 1 }, .033)
   const down = easeBands({ bass: 1, mid: 1, treble: 1 }, SILENT, .033)
   assert.ok(up.bass > 1 - down.bass)
+})
+
+/** Distance from the hole and radius of each world, from what the shader is sent. */
+const worlds = (...args) => {
+  const flat = planetsAt(...args)
+  return PLANETS.map((_, index) => {
+    const [x, y, z, size] = flat.slice(index * 4, index * 4 + 4)
+    return { x, y, z, size, reach: Math.hypot(x, y, z) }
+  })
+}
+const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`)
+
+test('a world stays on its circle wherever it has turned to, leaning out of the disc', () => {
+  for (const turn of [0, 1.7, 40, 9000]) worlds(turn, 0, 1, SILENT).forEach(({ reach }, index) => close(reach, PLANETS[index].orbit))
+  for (const [index, { tilt }] of PLANETS.entries()) {
+    const heights = Array.from({ length: 400 }, (_, step) => Math.abs(worlds(step * 3, 0, 1, SILENT)[index].y))
+    assert.ok(Math.max(...heights) > PLANETS[index].orbit * Math.sin(Math.abs(tilt)) * .9)
+  }
+})
+
+test('further out is slower, turning the same way as the gas', () => {
+  const rates = PLANETS.map(({ orbit }) => orbitRate(orbit))
+  assert.ok(rates.every((rate) => rate < 0))
+  for (const [index, rate] of rates.slice(1).entries()) assert.ok(Math.abs(rate) < Math.abs(rates[index]))
+})
+
+test('your voice draws the worlds in, and his sends them out', () => {
+  const still = worlds(3, 0, 1, SILENT)
+  const heard = worlds(3, .6, 1, SILENT)
+  const spoken = worlds(3, -.6, 1, SILENT)
+  still.forEach(({ reach }, index) => assert.ok(heard[index].reach < reach && reach < spoken[index].reach))
+})
+
+test('at full voice no world reaches the gas it started outside of, the hole or the camera', () => {
+  const loud = { bass: 1, mid: 1, treble: 1 }
+  for (const world of worlds(0, 1, 1, loud)) assert.ok(world.reach - world.size > 2.7, `caiu no buraco: ${world.reach}`)
+  for (const world of worlds(0, -1, 1, loud)) assert.ok(world.reach + world.size < 24 - 2, `bateu na câmera: ${world.reach}`)
+})
+
+test('each part of the voice swells its own world', () => {
+  const still = worlds(0, 0, 1, SILENT)
+  for (const voice of ['bass', 'mid', 'treble']) {
+    const sung = worlds(0, 0, 1, { ...SILENT, [voice]: 1 })
+    PLANETS.forEach((planet, index) => {
+      if (planet.voice === voice) assert.ok(sung[index].size > still[index].size)
+      else close(sung[index].size, still[index].size)
+    })
+  }
+})
+
+test('with no presence there are no worlds to trace', () => {
+  assert.ok(worlds(5, .5, 0, { bass: 1, mid: 1, treble: 1 }).every(({ size }) => size === 0))
 })

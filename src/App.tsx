@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Scene } from './scene/Scene'
+import { setCinema, useCinema } from './lib/cinema'
 import { Hud } from './ui/Hud'
 import { MissionControl } from './ui/MissionControl'
 import { WorkspacePanel } from './ui/WorkspacePanel'
@@ -829,6 +830,9 @@ export default function App() {
         case 'personality':
           if (['formal', 'equilibrado', 'bem-humorado', 'sarcastico'].includes(a.value)) useWorkspace.getState().setSettings({ personality: a.value })
           break
+        case 'cinema':
+          setCinema(a.on === true)
+          break
         case 'initiative':
           useWorkspace.getState().setSettings({ initiative: a.on === true })
           break
@@ -993,6 +997,12 @@ export default function App() {
 
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
+      // Above the check below: a button keeps the focus after a click, and the key means nothing to it.
+      if (e.key.toLowerCase() === 'c' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !(e.target as HTMLElement)?.isContentEditable) {
+        e.preventDefault()
+        setCinema(!useCinema.getState().on)
+        return
+      }
       if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(tag) || (e.target as HTMLElement)?.isContentEditable) return
 
       // V auditions the next British voice installed on this machine. Which
@@ -1042,7 +1052,8 @@ export default function App() {
       // no key for at all.
       if (e.key === 'Escape') {
         e.preventDefault()
-        if (store.getState().phase !== 'offline') goDormant()
+        if (useCinema.getState().on) setCinema(false)
+        else if (store.getState().phase !== 'offline') goDormant()
         return
       }
 

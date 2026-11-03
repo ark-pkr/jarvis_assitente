@@ -21,7 +21,7 @@ const configFile = path.join(directory, 'desktop-settings.json')
 const token = randomBytes(32).toString('hex')
 const DEFAULT_HOTKEY = 'Control+Alt+J'
 const LOGIN_ARGS = ['--segundo-plano']
-const MINI_SIZE = { width: 190, height: 230 }
+const MINI_SIZE = { width: 180, height: 148 }
 let win, mini, tray, worker, origin, config = {}, quitting = false, restarting = false, notificationTimer, contextTimer, contextWarningShown = false
 let hotkeyError = '', jarvisPhase = 'offline', attentionReturn = null
 const log = (text) => { void fs.appendFile(path.join(directory, 'desktop.log'), `${new Date().toISOString()} ${text}\n`).catch(() => {}) }
@@ -82,7 +82,11 @@ async function createMini() {
     title: 'JARVIS', frame: false, transparent: true, resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, focusable: false, alwaysOnTop: true, hasShadow: false, show: false, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false,
       partition: 'persist:jarvis-app', backgroundThrottling: false, additionalArguments: [`--jarvis-origin=${origin}`] } })
+  // It never throttles, so nothing but this stops it drawing while nobody can see it.
+  for (const change of ['show', 'hide']) mini.on(change, () => mini?.webContents.send('jarvis:mini-visible', change === 'show'))
   mini.setAlwaysOnTop(true, 'floating')
+  // Only the hole itself answers the mouse; a click anywhere else goes to whatever is behind.
+  mini.setIgnoreMouseEvents(true, { forward: true })
   // Its own pixels must never end up in a screen capture sent to the model.
   mini.setContentProtection(true)
   mini.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -146,6 +150,7 @@ async function boot() {
   })
   // The page never gets the clipboard permission, which would also let it read.
   ipcMain.handle('jarvis:copy-text', (event, text) => { trusted(event); if (typeof text === 'string' && text.length <= 200000) clipboard.writeText(text) })
+  ipcMain.handle('jarvis:fullscreen', (event, on) => { trusted(event); win.setFullScreen(on === true) })
   ipcMain.handle('jarvis:voice-identity-status', (event) => {
     trusted(event)
     return { configured: Boolean(config.encryptedVoiceAccessKey), enrolled: Boolean(config.encryptedVoiceProfile) }
@@ -188,6 +193,7 @@ async function boot() {
     if (state.phase !== jarvisPhase) { jarvisPhase = state.phase; syncMini() }
     if (mini?.isVisible()) mini.webContents.send('jarvis:mini-state', { phase: state.phase, level: Number(state.level) || 0, caption: String(state.caption ?? '').slice(0, 120), looking: String(state.looking ?? '').slice(0, 120) })
   })
+  ipcMain.handle('jarvis:mini-mouse', (event, inside) => { if (event.sender === mini?.webContents) mini.setIgnoreMouseEvents(inside !== true, { forward: true }) })
   ipcMain.handle('jarvis:mini-open', (event) => { if (event.sender === mini?.webContents) show() })
   // A confirmation can arrive while he is in the tray. Bring the window up for
   // it, and put things back afterwards the way they were.

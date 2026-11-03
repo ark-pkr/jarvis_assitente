@@ -13,7 +13,7 @@
  * this file is only the fallback for when that file isn't there.
  */
 
-type Cue = 'boot' | 'wake' | 'listen' | 'heard' | 'tool' | 'done' | 'error'
+type Cue = 'boot' | 'wake' | 'listen' | 'heard' | 'tool' | 'done' | 'error' | 'tap' | 'open' | 'close' | 'mode'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -79,7 +79,7 @@ export async function unlockAudio(): Promise<void> {
 
 /** Pick up any real audio files the user has dropped into public/audio/. */
 async function loadOverrides() {
-  const cues: Cue[] = ['boot', 'wake', 'listen', 'heard', 'tool', 'done', 'error']
+  const cues: Cue[] = ['boot', 'wake', 'listen', 'heard', 'tool', 'done', 'error', 'tap', 'open', 'close', 'mode']
   await Promise.all(
     cues.map(async (cue) => {
       if (samples.has(cue)) return
@@ -208,6 +208,26 @@ const synth: Record<Cue, () => void> = {
   error: () => {
     blip(320, { dur: 0.18, type: 'square', gain: 0.14 })
     blip(226, { at: 0.13, dur: 0.3, type: 'square', gain: 0.12 })
+  },
+
+  /** Interface cues sit well under the rest: heard a hundred times a day, they have to stay out of the way. */
+  tap: () => blip(1760, { dur: 0.035, gain: 0.05 }),
+
+  open: () => {
+    blip(440, { dur: 0.16, gain: 0.06, sweepTo: 990 })
+    noise({ dur: 0.16, gain: 0.02, from: 900, to: 4200 })
+  },
+
+  close: () => {
+    blip(880, { dur: 0.14, gain: 0.05, sweepTo: 390 })
+    noise({ dur: 0.14, gain: 0.015, from: 3600, to: 700 })
+  },
+
+  /** Crossing into another mode: a low swell that lands on a clean note. */
+  mode: () => {
+    noise({ dur: 0.36, gain: 0.035, from: 240, to: 3200 })
+    blip(330, { dur: 0.3, gain: 0.05, sweepTo: 660 })
+    blip(1320, { at: 0.26, dur: 0.16, gain: 0.06 })
   },
 }
 
