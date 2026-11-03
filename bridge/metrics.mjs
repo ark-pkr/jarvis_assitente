@@ -18,7 +18,8 @@ export function turnCost({ inputTokens = 0, outputTokens = 0, thoughtTokens = 0 
 
 /** Numbers only. Nothing the user said or the model answered is ever written. */
 export async function recordTurn(usage, file = dataPath('metrics.jsonl')) {
-  console.log(`[jarvis] turno: primeira resposta ${usage.firstTextMs ?? '-'} ms, total ${usage.totalMs} ms, `
+  console.log(`[jarvis] turno: primeira resposta ${usage.firstTextMs ?? '-'} ms, total ${usage.totalMs} ms `
+    + `(${usage.steps ?? '-'} passos, modelo ${usage.modelMs ?? '-'} ms, ferramentas ${usage.toolMs ?? '-'} ms, aprovação ${usage.approvalMs ?? '-'} ms), `
     + `tokens ${usage.inputTokens} entrada, ${usage.cachedTokens} em cache, ${usage.outputTokens} saída, ${usage.thoughtTokens} raciocínio`)
   try {
     await fs.mkdir(path.dirname(file), { recursive: true })
@@ -27,5 +28,38 @@ export async function recordTurn(usage, file = dataPath('metrics.jsonl')) {
     await fs.appendFile(file, JSON.stringify({ at: new Date().toISOString(), ...usage }) + '\n')
   } catch (error) {
     console.warn(`[jarvis] metrics: ${error.message}`)
+  }
+}
+
+const SLOW_MS = 6000
+const quantile = (values, share) => {
+  const sorted = values.filter((value) => typeof value === 'number').sort((a, b) => a - b)
+  return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))] : null
+}
+const mean = (rows, key) => {
+  const values = rows.map((row) => row[key]).filter((value) => typeof value === 'number')
+  return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null
+}
+
+/**
+ * What the recorded turns say about speed: how long to the first word, and for the
+ * slow ones, where the time went. Turns from before steps were recorded count for
+ * speed but not for the breakdown.
+ */
+export function summariseTurns(rows) {
+  const turns = rows.filter((row) => typeof row.totalMs === 'number')
+  const firstWord = turns.map((row) => row.firstTextMs ?? row.totalMs)
+  const slow = turns.filter((row) => (row.firstTextMs ?? row.totalMs) > SLOW_MS)
+  const measured = slow.filter((row) => typeof row.steps === 'number')
+  return {
+    turns: turns.length,
+    firstWord: { median: quantile(firstWord, 0.5), p90: quantile(firstWord, 0.9) },
+    slow: slow.length,
+    breakdown: measured.length ? {
+      turns: measured.length,
+      steps: mean(measured, 'steps'), toolCalls: mean(measured, 'toolCalls'),
+      modelMs: mean(measured, 'modelMs'), toolMs: mean(measured, 'toolMs'), approvalMs: mean(measured, 'approvalMs'),
+      inputTokens: mean(measured, 'inputTokens'), deep: measured.filter((row) => row.deep).length,
+    } : null,
   }
 }
