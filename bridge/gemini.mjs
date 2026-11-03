@@ -167,6 +167,8 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
         let held = null
         let unbacked = false
         let nudged = false
+        // A claim made beside its own tool call, said only if that call works.
+        let awaiting = null
         const startedAt = Date.now()
         // Where the time went, so a slow turn can be told apart: the model, the tools (an
         // approval waits inside its tool), or simply many steps.
@@ -251,7 +253,11 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
             if (model === options.deepModel) usage.deep = true
             if (held) {
               // A suspect step, or an answer too short to end a sentence ("Pronto, salvei").
-              if (!nudged && claimsAction(held) && !parts.some((part) => part.functionCall)) unbacked = true
+              const calling = parts.some((part) => part.functionCall)
+              // "Agendei o lembrete" beside the call that would schedule it is only true
+              // once it has run, and the person may still refuse it on screen.
+              if (claimsAction(held) && calling) awaiting = held
+              else if (claimsAction(held) && !nudged) unbacked = true
               else {
                 usage.firstTextMs ??= Date.now() - startedAt
                 answer += held
@@ -327,6 +333,16 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
               for (const item of result.content ?? []) {
                 if (item.type === 'image') responses.push({ inlineData: { mimeType: item.mimeType, data: item.data } })
               }
+            }
+            if (awaiting) {
+              // Said now that every call it came with has worked; otherwise never said,
+              // and the next step, told the action did not happen, says so instead.
+              if (!responses.some((part) => part.functionResponse?.response.isError)) {
+                usage.firstTextMs ??= Date.now() - startedAt
+                answer += awaiting
+                yield { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: awaiting } } }
+              }
+              awaiting = null
             }
             history.push({ role: 'user', parts: responses })
           }
