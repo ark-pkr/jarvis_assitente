@@ -37,6 +37,7 @@
     "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
     "desktop:start": "node scripts/run-desktop.mjs",
     "desktop:dist": "npm run desktop:prepare && npm install --omit=dev --ignore-scripts --prefix desktop-app && electron-builder --config electron-builder.cjs --win --x64 --publish never",
+    "release:token": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-token.ps1",
     "desktop:release": "npm test && npm run desktop:dist && node scripts/release.mjs",
     "test:desktop-app": "node bridge/desktop-http.test.mjs",
     "test:electron": "node scripts/check-electron.mjs",
