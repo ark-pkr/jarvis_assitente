@@ -391,3 +391,20 @@ test('a claim is said when the tool did run, or is called in the same step', asy
     assert.match(said.join(''), /removi o tema\.$/)
   }
 })
+
+test('a claim beside its own call waits for it, and is never said when the call is refused', async () => {
+  let calls = 0
+  const ai = fakeAI((request) => {
+    if (++calls === 1) return chunks({ text: 'Agendei o lembrete para amanhã. ' }, { functionCall: { name: 'ui_reset', args: {} } })
+    assert.equal(request.contents.at(-1).parts[0].functionResponse.response.isError, true)
+    return chunks({ text: 'Não agendei: você cancelou.' })
+  })
+  const said = []
+  const session = geminiQuery({ prompt: messages('me lembra amanhã'), options: { ...defaults,
+    canUseTool: async () => ({ behavior: 'deny' }), mcpServers: { jarvis_ui: uiServer(() => {}) } } }, { ai })
+  for await (const event of session) {
+    if (event.type === 'stream_event' && event.event.type === 'content_block_delta') said.push(event.event.delta.text)
+    if (event.type === 'result') assert.equal(event.result, 'Não agendei: você cancelou.')
+  }
+  assert.equal(said.join(''), 'Não agendei: você cancelou.')
+})
