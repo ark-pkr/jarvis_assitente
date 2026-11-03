@@ -45,6 +45,7 @@
     "test:backup": "node scripts/check-backup.mjs",
     "test:visual": "node scripts/check-visual.mjs",
     "test:intelligence": "node scripts/eval-intelligence.mjs",
+    "metrics": "node scripts/metrics.mjs",
     "test:modes": "node scripts/check-modes.mjs",
     "test:studio": "node bridge/studio.test.mjs"
   },

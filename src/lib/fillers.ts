@@ -77,6 +77,8 @@ type Rule = {
 const FOOTAGE = ['Montando o vídeo.', 'Renderizando a sequência.']
 
 const BY_TOOL: Rule[] = [
+  // Not a tool: the deep model, which thinks in silence for several seconds.
+  { tool: /pensar[_ ]melhor/, lines: ['Deixa eu pensar.', 'Hmm, deixa eu pensar nisso.', 'Um segundo, tô pensando.'] },
   { tool: /weather/, lines: ['Vendo a previsão.', 'Consultando o clima.'] },
   { tool: /screen_look/, lines: ['Olhando sua tela.'] },
   // Video sits above image because higgsfield and palmier both do either, so

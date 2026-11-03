@@ -432,8 +432,11 @@ wss.on('connection', (socket, req) => {
     idleSummary.unref?.()
   }
 
-  const ask = (kind, args, timeoutMs = 20_000) =>
-    new Promise((resolve, reject) => {
+  /** Time spent waiting for the person to approve, which no speed-up can win back. */
+  let approvalMs = 0
+  const ask = (kind, args, timeoutMs = 20_000) => {
+    const began = Date.now()
+    const asked = new Promise((resolve, reject) => {
       if (socket.readyState !== socket.OPEN) {
         return reject(new Error('the interface is not connected'))
       }
@@ -447,6 +450,9 @@ wss.on('connection', (socket, req) => {
       waiting.set(id, { resolve, reject, timer })
       send({ type: kind, id, ...args })
     })
+    if (kind === 'approval') void asked.finally(() => { approvalMs += Date.now() - began }).catch(() => {})
+    return asked
+  }
 
   /**
    * Announcing a tool on the HUD, once, and only if it actually runs.
@@ -642,6 +648,10 @@ wss.on('connection', (socket, req) => {
           case 'tone':
             sendTurn({ type: 'tone', value: msg.value })
             break
+          case 'thinking':
+            // Heard as a tool: the same badge and the same filler, with a line of its own.
+            sendTurn({ type: 'tool', name: 'mcp__jarvis__pensar_melhor' })
+            break
           case 'tool_outcome':
             if (msg.failed) activityFailed = true
             break
@@ -701,7 +711,8 @@ wss.on('connection', (socket, req) => {
             // empty text is indistinguishable from a turn that simply had
             // nothing to say — the HUD stops spinning and JARVIS stands there
             // silent. Say what happened instead.
-            if (msg.usage) void recordTurn(msg.usage)
+            if (msg.usage) void recordTurn({ ...msg.usage, approvalMs })
+            approvalMs = 0
             if (msg.subtype === 'success') {
               sendTurn({
                 type: 'done',

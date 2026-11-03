@@ -162,7 +162,9 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
         let unbacked = false
         let nudged = false
         const startedAt = Date.now()
-        const usage = { firstTextMs: null, totalMs: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, thoughtTokens: 0 }
+        // Where the time went, so a slow turn can be told apart: the model, the tools (an
+        // approval waits inside its tool), or simply many steps.
+        const usage = { firstTextMs: null, totalMs: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, thoughtTokens: 0, steps: 0, toolCalls: 0, modelMs: 0, toolMs: 0, deep: false }
         const instructions = typeof options.systemPrompt === 'function' ? options.systemPrompt(user.message) : options.systemPrompt
         // Null means every tool. Set once per request, and widened for good by
         // the first abrir_ferramentas, so a turn only ever gains tools.
@@ -171,6 +173,8 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
         let model = hard ? options.deepModel : routed && options.lightModel ? options.lightModel : options.model
         try {
           ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+          // Thinking at length is silent work, the way a tool is: the interface says so.
+          if (hard) yield { type: 'thinking' }
           let complete = false
           for (let step = 0; step < (options.maxTurns ?? 24); step++) {
             signal.throwIfAborted()
@@ -188,6 +192,8 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
                 ...(declarations.length ? { tools: [{ functionDeclarations: declarations }] } : {}),
               },
             })
+            usage.steps++
+            const askedAt = Date.now()
             let stream
             try { stream = await request() }
             catch (error) {
@@ -235,6 +241,8 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
             usage.cachedTokens += stepUsage?.cachedContentTokenCount ?? 0
             usage.outputTokens += stepUsage?.candidatesTokenCount ?? 0
             usage.thoughtTokens += stepUsage?.thoughtsTokenCount ?? 0
+            usage.modelMs += Date.now() - askedAt
+            if (model === options.deepModel) usage.deep = true
             if (held) {
               // A suspect step, or an answer too short to end a sentence ("Pronto, salvei").
               if (!nudged && claimsAction(held) && !parts.some((part) => part.functionCall)) unbacked = true
@@ -269,6 +277,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
               if (call.name === THINK_HARDER) {
                 // For the rest of the turn: the deep model, thinking at length.
                 hard = true
+                yield { type: 'thinking' }
                 model = options.deepModel
                 responses.push({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { isError: false, content: [{ type: 'text', text: 'Raciocínio profundo ativado. Pense passo a passo, confira o resultado e só então responda.' }] } } })
                 continue
@@ -285,6 +294,8 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
                 yield { type: 'stream_event', event: { type: 'content_block_start', content_block: {
                   type: 'tool_use', id: `${step}_${responses.length}`, name: entry.original,
                 } } }
+                usage.toolCalls++
+                const calledAt = Date.now()
                 try {
                   result = await entry.client.callTool({ name: entry.tool.name, arguments: call.args ?? {} },
                     undefined, { signal, timeout: 110_000 })
@@ -293,6 +304,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
                   console.warn(`[jarvis] tool ${entry.original} failed: ${error?.message ?? error}`)
                   result = { isError: true, content: [{ type: 'text', text: `Tool execution failed: ${String(error?.message ?? error).slice(0, 300)}` }] }
                 }
+                usage.toolMs += Date.now() - calledAt
               }
               if (!entry) console.warn(`[jarvis] the model called ${call.name}, which does not exist`)
               signal.throwIfAborted()

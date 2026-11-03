@@ -317,6 +317,23 @@ test('the light model can hand a hard question up to the deep model, once', asyn
   ])
 })
 
+test('a turn reports its steps, its tools and its deep thinking, and says when it starts to think', async () => {
+  let calls = 0
+  const ai = fakeAI(() => {
+    calls++
+    if (calls === 1) return chunks({ functionCall: { name: 'ui_reset', args: {} } })
+    if (calls === 2) return chunks({ functionCall: { name: 'pensar_melhor', args: {} } })
+    return chunks({ text: 'Tudo certo.' })
+  })
+  const events = []
+  const session = geminiQuery({ prompt: messages('volte ao normal e pense bem'), options: { ...defaults, maxTurns: 5, deepModel: 'fundo', mcpServers: { jarvis_ui: uiServer(() => {}) } } }, { ai })
+  for await (const event of session) events.push(event)
+  const { usage } = events.find((event) => event.type === 'result')
+  assert.equal(events.filter((event) => event.type === 'thinking').length, 1)
+  assert.deepEqual({ steps: usage.steps, toolCalls: usage.toolCalls, deep: usage.deep }, { steps: 3, toolCalls: 1, deep: true })
+  assert.ok(usage.modelMs >= 0 && usage.toolMs >= 0)
+})
+
 test('what reads as a claim of an action, and what does not', () => {
   for (const text of ['Pronto, salvei o lembrete.', 'Abri o Word pra você.', 'Feito! Marquei para sexta.', 'Já excluí o arquivo.']) assert.equal(claimsAction(text), true, text)
   for (const text of ['Não abri o bloco de notas.', 'Pronto para salvar?', 'Quer que eu abra o arquivo?', 'Machado de Assis nasceu em 1839.', 'Vou salvar isso.']) assert.equal(claimsAction(text), false, text)
