@@ -8,6 +8,7 @@ import { chunks, Library, similarity } from '../bridge/library.mjs'
 import { daySentence, findConflicts, startingSoon, watchCalendar } from '../bridge/foresight.mjs'
 import { buildBriefing } from '../bridge/briefing.mjs'
 import { isHardRequest, routeTools } from '../bridge/tool-routing.mjs'
+import { buildSystemPrompt } from '../bridge/prompt.mjs'
 import { failureNote } from '../bridge/gemini.mjs'
 import { AssistantMemory } from '../bridge/assistant.mjs'
 import { pointsAtSomething } from '../src/lib/windowContext.ts'
@@ -233,6 +234,15 @@ test('tools for the new abilities are loaded when the words call for them', () =
   assert.ok(servers('o que combinamos ontem').has('jarvis_memory'))
   assert.ok(servers('resume isso', { windowContext: 'Word' }).has('jarvis_eyes'))
   assert.ok(!servers('resume isso').has('jarvis_eyes'))
+})
+
+test('"o que eu tenho na quinta" reaches the reminders and the calendar, and is told what they said comes first', () => {
+  for (const content of ['o que eu tenho na quinta?', 'tenho algo no sábado?', 'o que tenho amanhã']) {
+    const servers = routeTools({ content, fast: true })
+    assert.ok(servers.has('jarvis_assistant') && servers.has('jarvis_calendar'), content)
+  }
+  assert.match(buildSystemPrompt({ content: 'o que eu tenho na quinta?' }), /calendar is only one/)
+  assert.ok(!routeTools({ content: 'me explica segundo plano', fast: true }).has('jarvis_calendar'))
 })
 
 test('a failed action tells the model plainly that it did not happen', () => {
