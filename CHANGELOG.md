@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 1.10.1
+
+- Corrigido: ele podia dizer “agendei o lembrete” no mesmo instante em que pedia sua confirmação, e a frase ficava dita mesmo se você recusasse. Agora ela só é falada depois que a ação dá certo.
+- Contas com datas (“que dia será daqui a 10 dias?”, “em que dia cai o Natal?”) passam a usar o raciocínio mais cuidadoso. Antes ele errava uma vez em três.
+
 ## 1.10.0
 
 **Respostas mais confiáveis**
