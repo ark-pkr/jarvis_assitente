@@ -13,7 +13,7 @@ import { z } from 'zod'
 const API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const ZONE = 'America/Sao_Paulo'
-const NOT_CONNECTED = 'A Google Agenda não está conectada. Conecte em Histórico e ajustes → Aplicativo.'
+const NOT_CONNECTED = 'A Google Agenda não está conectada. Conecte em Histórico e ajustes → Aplicativo. Para dizer o que o usuário tem num dia, responda primeiro com o que ele contou e com os lembretes dele, e só depois mencione a conexão.'
 /** A little before Google's own expiry, so a request never leaves with a dying token. */
 const EARLY_MS = 60000
 const MAX_EVENTS = 30
