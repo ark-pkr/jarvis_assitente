@@ -245,6 +245,11 @@ test('"o que eu tenho na quinta" reaches the reminders and the calendar, and is 
   assert.ok(!routeTools({ content: 'me explica segundo plano', fast: true }).has('jarvis_calendar'))
 })
 
+test('a recommendation carries the search that can check its titles', () => {
+  for (const content of ['me recomenda um livro de ficção científica', 'pensando bem, prefiro fantasia, e algo curto', 'indica uma série boa']) assert.ok(routeTools({ content, fast: true }).has('jarvis_daily'), content)
+  assert.match(buildSystemPrompt({ content: 'oi' }), /REAL TITLES/)
+})
+
 test('a failed action tells the model plainly that it did not happen', () => {
   assert.match(failureNote().text, /NÃO foi concluída/)
 })
