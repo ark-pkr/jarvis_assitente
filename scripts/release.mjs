@@ -14,9 +14,10 @@
  *
  * A failure anywhere leaves at most a draft, which no installed copy can see.
  *
- *   $env:GH_TOKEN = "..."; npm run desktop:release
+ *   npm run release:token     (uma vez: guarda o token criptografado)
+ *   npm run desktop:release
  */
-import { promises as fs } from 'node:fs'
+import { promises as fs, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
@@ -52,6 +53,20 @@ export function changelogSection(changelog, version) {
   return (end < 0 ? rest : rest.slice(0, end)).join('\n').trim()
 }
 
+/** Where `npm run release:token` keeps the token, encrypted by Windows for this user. */
+export const TOKEN_FILE = path.join(process.env.APPDATA ?? '', 'JARVIS-release', 'github-token.txt')
+
+/** Decrypts the saved token, or returns '' when there is none. The path goes in by environment, not in the script text. */
+function storedToken() {
+  if (process.platform !== 'win32' || !existsSync(TOKEN_FILE)) return ''
+  const script = "$s = Get-Content -LiteralPath $env:JARVIS_TOKEN_FILE | ConvertTo-SecureString; [Console]::Out.Write([Net.NetworkCredential]::new('', $s).Password)"
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', env: { ...process.env, JARVIS_TOKEN_FILE: TOKEN_FILE }, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    fail(`Não consegui abrir o token guardado em ${TOKEN_FILE}. Guarde de novo com: npm run release:token`)
+  }
+}
+
 function fail(message) {
   console.error(`\n✖ ${message}`)
   process.exit(1)
@@ -69,8 +84,8 @@ async function github(token, method, url, body, headers = {}) {
 }
 
 async function main() {
-  const token = process.env.GH_TOKEN?.trim()
-  if (!token) fail('Defina o token antes: $env:GH_TOKEN = "seu-token" (precisa poder criar releases no repositório).')
+  const token = process.env.GH_TOKEN?.trim() || storedToken()
+  if (!token) fail('Nenhum token do GitHub. Guarde um uma vez com: npm run release:token')
 
   const root = process.cwd()
   const { version } = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'))
@@ -103,7 +118,7 @@ async function main() {
 
   // Drafts don't show up by tag, so a draft left by a failed run is found in the list.
   const list = await github(token, 'GET', '/releases?per_page=30')
-  if (list.status === 401 || list.status === 403) fail('O GitHub recusou o token. Ele precisa da permissão public_repo (clássico) ou Contents: Read and write (fine-grained).')
+  if (list.status === 401 || list.status === 403) fail('O GitHub recusou o token. Ele precisa da permissão public_repo (clássico) ou Contents: Read and write (fine-grained). Para trocar: npm run release:token')
   let release = list.data?.find?.((item) => item.draft && item.tag_name === tag)
   if (release) console.log(`• Reaproveitando o rascunho de ${tag}`)
   else {

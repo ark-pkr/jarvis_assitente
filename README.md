@@ -171,7 +171,7 @@ navegador ou Electron  ⇄  bridge/server.mjs (WebSocket e HTTP em 127.0.0.1)
 | `npm run test:ui`, `test:voice`, `test:assistant-ui` e outros `test:*` | Verificações com o app aberto; alguns consomem a API |
 | `npm run test:presence` | Ativação sozinho, atalho, mini esfera e captura de tela no aplicativo real, sem usar a API |
 | `npm run desktop:dist` | Gera o instalador em `release/` |
-| `npm run desktop:release` | Gera o instalador e publica no GitHub Releases, de onde a atualização automática baixa. Precisa de `GH_TOKEN` (token clássico com `public_repo`) e do commit já enviado ao GitHub. Se algo falhar no meio, sobra só um rascunho; é só rodar de novo |
+| `npm run desktop:release` | Gera o instalador e publica no GitHub Releases, de onde a atualização automática baixa. Antes, uma vez só, guarde o token (clássico, com `public_repo`) com `npm run release:token`: ele fica criptografado pelo Windows fora do projeto, e o JARVIS nunca o vê. Só publica com testes passando, sem mudanças pendentes e com o commit na `main` do GitHub. Se algo falhar no meio, sobra só um rascunho; é só rodar de novo |
 
 | Variável | Padrão | Efeito |
 |---|---|---|

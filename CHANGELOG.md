@@ -4,6 +4,7 @@
 
 - As notificações voltam a aparecer como **JARVIS**, e não como “Electron”.
 - O registro do JARVIS passa a anotar cada passo da atualização, inclusive o momento em que você sai, para descobrir por que a nova versão às vezes não é instalada ao sair.
+- Publicar ficou mais simples: o token do GitHub é guardado uma vez, criptografado pelo Windows (`npm run release:token`), em vez de ir no `.env.local`, que o JARVIS lê em modo de desenvolvimento.
 - Publicar uma versão agora exige os testes passando, nenhuma mudança pendente e o código já na versão principal do GitHub.
 
 ## 1.11.1
