@@ -48,11 +48,11 @@ const SERVERS = [
   ['jarvis_desktop', /\babr[aei]\w*|aplicativo|\bprograma|vs ?code|\bexcel\b|powerpoint|\bword\b|calculadora|\bbloco de notas\b/],
   ['jarvis_word', /\bword\b|documento|docx/],
   ['jarvis_lessons', /\bpdf\b|\baula|\bapostila/],
-  ['jarvis_assistant', /\bhoje\b|\bamanha\b|\bdia\b|lembr|\btarefa|rotina|\bparei\b|continu|\bfoco\b|lento|desempenho|\bcpu\b|\bdisco\b|memoria|\bestudo|flashcard|\bmaterial\b|\btimer\b|cronomet|temporizador|pomodoro|\bminutos?\b/],
+  ['jarvis_assistant', /\bhoje\b|\bo que (eu )?tenho\b|\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b|\bamanha\b|\bdia\b|lembr|\btarefa|rotina|\bparei\b|continu|\bfoco\b|lento|desempenho|\bcpu\b|\bdisco\b|memoria|\bestudo|flashcard|\bmaterial\b|\btimer\b|cronomet|temporizador|pomodoro|\bminutos?\b/],
   ['jarvis_study', /prova oral|\bprova\b|me test[ae]|me pergunt|me examin|\bquiz\b|simulado|\brevis[ao]|\baula|professor|\bmateria\b/],
   ['jarvis_tasks', /segundo plano|me avis|enquanto isso|\bpesquis\w* .*\bavis|resultado da pesquisa|terminou a pesquisa|\bo que (voce )?achou\b/],
   ['jarvis_daily', /clima|\btempo\b|chuva|chove|temperatura|previsao|calor|\bfrio\b|musica|\bfaixa|volume|\bsom\b|\bmudo\b|\bpausa\b|\bpause\b|\btoca|\bspotify|pesquis|notici|\bpreco|cotacao|\bdolar\b|\beuro\b|\bplacar|\bjogo\b|resultado|\bquem ganhou|\bquanto (?:foi|esta|custa)/],
-  ['jarvis_calendar', /\bagenda\b|calendario|\bcompromisso|\breuni[ao]|\bevento|\bconsulta\b|\bmarc[aeo]\w*|\bdesmarc|\bo que tenho\b|\bestou livre\b|\bhorario livre\b/],
+  ['jarvis_calendar', /\bagenda\b|calendario|\bcompromisso|\breuni[ao]|\bevento|\bconsulta\b|\bmarc[aeo]\w*|\bdesmarc|\bo que (eu )?tenho\b|\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b|\bestou livre\b|\bhorario livre\b/],
   ['jarvis_eyes', /\bcamera\b|\bolh[ae]|\bveja\b|\bvendo\b|\btela\b|esse erro|essa janela|segurando/],
   ['jarvis_chrome', /pesquis|procur|\bbusc|notici|\batual|\bagora\b|\bhoje\b|\bpreco|cotacao|\bsite\b|navegador|\bgoogle\b|internet|\be-?mail|\bquem e\b|resultado|\bjogo\b/],
 ]
