@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## Próxima versão
+## 1.11.0
 
 - Atualização automática: novas versões são baixadas do GitHub em segundo plano e instaladas quando você sai do JARVIS. O menu da bandeja ganha **Reiniciar e atualizar**.
 - Lembretes com data aparecem mesmo depois de **Sair do JARVIS**, pelo Agendador do Windows. Clicar na notificação abre a janela.
