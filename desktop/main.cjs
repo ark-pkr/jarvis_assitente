@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, session, ipcMain, clipboard, dialog, safeStorage, utilityProcess, Notification, shell, globalShortcut, screen, desktopCapturer } = require('electron')
 const { connectCalendar, revokeCalendar } = require('./calendar-auth.cjs')
 const fs = require('node:fs/promises')
+const { appendFileSync } = require('node:fs')
 const path = require('node:path')
 const { randomBytes } = require('node:crypto')
 const { parseEnv } = require('node:util')
@@ -10,7 +11,10 @@ const { startUpdater } = require('./updater.cjs')
 
 app.setName('JARVIS')
 app.setPath('userData', path.join(app.getPath('appData'), 'JARVIS'))
-app.setAppUserModelId('br.jarvis.assistente')
+// Windows names a notification after the Start Menu shortcut carrying this id.
+// A development run under the same id left an "Electron" shortcut behind that
+// won over the installed JARVIS one, so development gets an id of its own.
+app.setAppUserModelId(app.isPackaged ? 'br.jarvis.assistente' : 'br.jarvis.assistente.dev')
 // "Ativar ao abrir" has no click to unlock audio with, and an assistant that
 // starts by itself has to be able to speak. This window only ever loads our page.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -27,6 +31,8 @@ const MINI_SIZE = { width: 180, height: 148 }
 let win, mini, tray, worker, origin, config = {}, quitting = false, restarting = false, notificationTimer, contextTimer, contextWarningShown = false
 let hotkeyError = '', jarvisPhase = 'offline', attentionReturn = null, stopUpdater = null
 const log = (text) => { void fs.appendFile(path.join(directory, 'desktop.log'), `${new Date().toISOString()} ${text}\n`).catch(() => {}) }
+/** For moments the process may end before an async write lands: quitting, and handing over to the installer. */
+const logNow = (text) => { try { appendFileSync(path.join(directory, 'desktop.log'), `${new Date().toISOString()} ${text}\n`) } catch { /* Never block quitting over a log line. */ } }
 const decrypted = (value) => value && safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(value, 'base64')) : ''
 const calendarEnv = () => config.encryptedCalendar ? { JARVIS_GOOGLE_CLIENT_ID: config.calendarClientId, JARVIS_GOOGLE_CLIENT_SECRET: decrypted(config.encryptedCalendarSecret), JARVIS_GOOGLE_REFRESH_TOKEN: decrypted(config.encryptedCalendar) } : {}
 const getKey = () => config.encryptedKey ? safeStorage.decryptString(Buffer.from(config.encryptedKey, 'base64')) : ''
@@ -280,7 +286,7 @@ async function boot() {
   tray.setToolTip('JARVIS - assistente pessoal')
   const trayMenu = (update) => Menu.buildFromTemplate([{ label: 'Abrir JARVIS', click: show }, ...(update ? [{ label: `Reiniciar e atualizar para ${update.version}`, click: update.install }] : []), { label: 'Sair do JARVIS', click: () => app.quit() }])
   tray.setContextMenu(trayMenu())
-  if (app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA) stopUpdater = startUpdater({ log, icon: path.join(__dirname, 'icon.png'), onReady: (version, install) => tray?.setContextMenu(trayMenu({ version, install })) })
+  if (app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA) stopUpdater = startUpdater({ log: logNow, icon: path.join(__dirname, 'icon.png'), onReady: (version, install) => tray?.setContextMenu(trayMenu({ version, install })) })
   tray.on('double-click', show)
   const notified = new Set()
   // Only an installed copy may leave a task behind in the Windows scheduler.
@@ -325,7 +331,8 @@ else {
   // A scheduled reminder firing while he is already open must not pull the window up.
   app.on('second-instance', (event, argv) => { if (!argv.includes(REMINDER_ARG)) show() })
   app.on('activate', show)
-  app.on('before-quit', () => { quitting = true; clearInterval(notificationTimer); clearInterval(contextTimer); stopUpdater?.(); globalShortcut.unregisterAll(); const orb = mini; mini = null; orb?.destroy(); worker?.kill(); tray?.destroy() })
+  app.on('before-quit', () => { if (!quitting) logNow('Saindo do JARVIS.'); quitting = true; clearInterval(notificationTimer); clearInterval(contextTimer); stopUpdater?.(); globalShortcut.unregisterAll(); const orb = mini; mini = null; orb?.destroy(); worker?.kill(); tray?.destroy() })
   app.on('window-all-closed', () => { if (quitting) app.quit() })
-  app.whenReady().then(boot).catch((error) => { log(error.message); dialog.showErrorBox('JARVIS não iniciou', error.message); app.quit() })
+  app.on('quit', (event, exitCode) => logNow(`JARVIS encerrado (código ${exitCode}).`))
+  app.whenReady().then(() => { logNow(`JARVIS ${app.getVersion()} iniciado${process.argv.some((arg) => arg.startsWith('--')) ? ` (${process.argv.slice(1).filter((arg) => arg.startsWith('--')).join(' ')})` : ''}.`); return boot() }).catch((error) => { log(error.message); dialog.showErrorBox('JARVIS não iniciou', error.message); app.quit() })
 }

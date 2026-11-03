@@ -16,7 +16,11 @@ function startUpdater({ log, icon, onReady }) {
   const { autoUpdater } = require('electron-updater')
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.logger = { info: () => {}, warn: (text) => log(`Atualização: ${text}`), error: (text) => log(`Atualização: ${text}`), debug: () => {} }
+  // Info included: "Auto install update on quit" and "Executing: <installer>" are
+  // the only trace of whether quitting handed over to the installer. `log` has to
+  // write synchronously, because by then the process is about to end.
+  const write = (text) => log(`Atualização: ${text}`)
+  autoUpdater.logger = { info: write, warn: write, error: write, debug: () => {} }
   autoUpdater.on('update-available', (info) => log(`Baixando a versão ${info.version}.`))
   autoUpdater.on('update-downloaded', (info) => {
     log(`Versão ${info.version} pronta para instalar.`)

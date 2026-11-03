@@ -82,10 +82,15 @@ async function main() {
     try { await fs.access(required) } catch { fail(`Não encontrei ${path.relative(root, required)}. Rode antes: npm run desktop:dist`) }
   }
 
-  // The tag is created on GitHub, so the commit it points to has to be there already.
+  // What ships has to be exactly what is on main: nothing uncommitted, nothing
+  // from a branch that was never merged. The tag is created on GitHub, so the
+  // commit it points to has to be there too.
+  const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim()
+  if (dirty) fail('Há mudanças sem commit. Faça o commit (ou descarte) antes de publicar, para o instalador ser exatamente o que está no Git.')
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  const remote = execFileSync('git', ['branch', '-r', '--contains', commit], { encoding: 'utf8' }).trim()
-  if (!remote) fail(`O commit ${commit.slice(0, 7)} ainda não está no GitHub. Envie com git push antes de publicar.`)
+  execFileSync('git', ['fetch', '--quiet', 'origin', 'main'])
+  const remote = execFileSync('git', ['branch', '-r', '--contains', commit], { encoding: 'utf8' })
+  if (!remote.split('\n').some((line) => line.trim() === 'origin/main')) fail(`O commit ${commit.slice(0, 7)} não está na main do GitHub. Mescle o PR e publique a partir da main.`)
 
   const bytes = await fs.readFile(installer)
   const sha512 = createHash('sha512').update(bytes).digest('base64')
