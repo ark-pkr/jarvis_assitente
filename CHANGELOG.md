@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 1.11.2
+
+- As notificações voltam a aparecer como **JARVIS**, e não como “Electron”.
+- O registro do JARVIS passa a anotar cada passo da atualização, inclusive o momento em que você sai, para descobrir por que a nova versão às vezes não é instalada ao sair.
+- Publicar uma versão agora exige os testes passando, nenhuma mudança pendente e o código já na versão principal do GitHub.
+
 ## 1.11.1
 
 - Corrigido: publicar uma versão nova falhava no meio e deixava de fora o arquivo que avisa o JARVIS da atualização. Agora o envio é feito em ordem, como rascunho, e só vira público quando está completo.
