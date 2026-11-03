@@ -1,5 +1,17 @@
 # Histórico de versões
 
+## 1.11.0
+
+- Atualização automática: novas versões são baixadas do GitHub em segundo plano e instaladas quando você sai do JARVIS. O menu da bandeja ganha **Reiniciar e atualizar**.
+- Lembretes com data aparecem mesmo depois de **Sair do JARVIS**, pelo Agendador do Windows. Clicar na notificação abre a janela.
+- Segurança: removido o modo antigo que chamava a API da Claude direto da interface, com a chave dentro do aplicativo. Todas as chaves ficam só no serviço local.
+- Código: atalhos de teclado, sincronização das conversas e regra de origens do serviço local saíram para arquivos próprios, a regra de origens com testes.
+
+## 1.10.1
+
+- Corrigido: ele podia dizer “agendei o lembrete” no mesmo instante em que pedia sua confirmação, e a frase ficava dita mesmo se você recusasse. Agora ela só é falada depois que a ação dá certo.
+- Contas com datas (“que dia será daqui a 10 dias?”, “em que dia cai o Natal?”) passam a usar o raciocínio mais cuidadoso. Antes ele errava uma vez em três.
+
 ## 1.10.0
 
 **Respostas mais confiáveis**

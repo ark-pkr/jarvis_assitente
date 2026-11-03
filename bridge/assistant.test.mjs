@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { AssistantMemory, handleAssistantRequest, searchMaterials, runRoutine, computerSummary, editorSelection, editorDiagnostics } from './assistant.mjs'
+import { AssistantMemory, nextDue, handleAssistantRequest, searchMaterials, runRoutine, computerSummary, editorSelection, editorDiagnostics } from './assistant.mjs'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 import { ProjectFiles } from './projects.mjs'
@@ -198,4 +198,19 @@ test('VS Code diagnostics require consent, are bounded, expire, and stay inside 
   await assert.rejects(editorDiagnostics(files, snapshotDirectory), /não autorizado|Autorize a pasta/)
   await fs.writeFile(snapshotFile, JSON.stringify({ ...snapshot, time: Date.now() - 16 * 60000 }))
   await assert.rejects(editorDiagnostics(files, snapshotDirectory), /expirados/)
+})
+
+test('the next reminder is the soonest one still owed', () => {
+  const now = Date.parse('2026-11-03T12:00:00-03:00')
+  const entries = [
+    { due: '2026-11-03T11:00:00-03:00' },
+    { due: '2026-11-05T09:00:00-03:00' },
+    { due: '2026-11-04T08:30:00-03:00' },
+    { due: '2026-11-03T13:00:00-03:00', notified: true },
+    { due: '2026-11-03T14:00:00-03:00', status: 'concluído' },
+    { due: '' },
+  ]
+  assert.equal(nextDue(entries, now), '2026-11-04T11:30:00.000Z')
+  assert.equal(nextDue([{ due: '2026-11-03T11:00:00-03:00' }], now), null)
+  assert.equal(nextDue([], now), null)
 })

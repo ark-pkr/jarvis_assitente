@@ -54,6 +54,20 @@ export function nextOccurrence(due, repeat, now = Date.now()) {
   }
   return stamp(time)
 }
+/**
+ * When the next dated reminder fires, as an ISO instant, or null. The desktop
+ * app hands it to the Windows Task Scheduler so the reminder still appears
+ * after the user quits JARVIS; timers are left out because they die with him.
+ */
+export function nextDue(entries, now = Date.now()) {
+  let soonest = Infinity
+  for (const item of entries) {
+    if (!item.due || item.notified || item.status === 'concluído') continue
+    const time = Date.parse(item.due)
+    if (Number.isFinite(time) && time > now && time < soonest) soonest = time
+  }
+  return soonest === Infinity ? null : new Date(soonest).toISOString()
+}
 export class AssistantMemory {
   constructor(directory = data) { this.directory = directory; this.queue = Promise.resolve() }
   async read() {
@@ -309,7 +323,7 @@ export async function handleAssistantRequest(req, res, cors, memory = assistantM
   try {
     if (req.method === 'GET') {
       await memory.tick(); const state = await memory.read()
-      if (req.url === '/assistant/alerts') return reply(200, { notifications: state.notifications, timers: state.timers })
+      if (req.url === '/assistant/alerts') return reply(200, { notifications: state.notifications, timers: state.timers, next: nextDue(state.entries) })
       if (req.url === '/studio') return reply(200, { activities: state.activities.slice(0, 4), roots: (await projectFiles.state()).roots })
       return reply(200, { ...state, roots: (await projectFiles.state()).roots })
     }

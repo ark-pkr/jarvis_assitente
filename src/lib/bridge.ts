@@ -1,13 +1,21 @@
-import type { AskHandlers } from './anthropic'
 import type { Blade, Panel } from '../store'
 import { conversationContext, useWorkspace, flushWorkspace } from '../workspace'
 import { windowNote } from './windowContext'
 import { BRIDGE_WS_URL } from '../config'
 
+export type AskHandlers = {
+  /** Fires for each chunk of the spoken answer. */
+  onText: (delta: string) => void
+  /** How the answer should sound, when the model says. */
+  onTone?: (tone: string) => void
+  /** Fires when the model starts running a tool. */
+  onTool: (name: string) => void
+}
+
 /**
  * Client for the local bridge (see bridge/server.mjs).
  *
- * Same `ask()` shape as the browser-direct path, so App.tsx doesn't care which
+ * The `ask()` shape brain.ts re-exports, so App.tsx doesn't care which
  * brain is behind it. The difference is what's reachable: this one runs on your
  * machine, so every MCP server in your Claude Code config is in play.
  *

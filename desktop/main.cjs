@@ -5,6 +5,8 @@ const path = require('node:path')
 const { randomBytes } = require('node:crypto')
 const { parseEnv } = require('node:util')
 const { getActiveWindow } = require('./active-window.cjs')
+const { createReminderTask, REMINDER_ARG } = require('./reminder-task.cjs')
+const { startUpdater } = require('./updater.cjs')
 
 app.setName('JARVIS')
 app.setPath('userData', path.join(app.getPath('appData'), 'JARVIS'))
@@ -23,7 +25,7 @@ const DEFAULT_HOTKEY = 'Control+Alt+J'
 const LOGIN_ARGS = ['--segundo-plano']
 const MINI_SIZE = { width: 180, height: 148 }
 let win, mini, tray, worker, origin, config = {}, quitting = false, restarting = false, notificationTimer, contextTimer, contextWarningShown = false
-let hotkeyError = '', jarvisPhase = 'offline', attentionReturn = null
+let hotkeyError = '', jarvisPhase = 'offline', attentionReturn = null, stopUpdater = null
 const log = (text) => { void fs.appendFile(path.join(directory, 'desktop.log'), `${new Date().toISOString()} ${text}\n`).catch(() => {}) }
 const decrypted = (value) => value && safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(value, 'base64')) : ''
 const calendarEnv = () => config.encryptedCalendar ? { JARVIS_GOOGLE_CLIENT_ID: config.calendarClientId, JARVIS_GOOGLE_CLIENT_SECRET: decrypted(config.encryptedCalendarSecret), JARVIS_GOOGLE_REFRESH_TOKEN: decrypted(config.encryptedCalendar) } : {}
@@ -103,7 +105,8 @@ async function createWindow() {
   win.on('close', (event) => { if (!quitting) { event.preventDefault(); win.hide() } })
   for (const change of ['hide', 'show', 'minimize', 'restore', 'focus', 'blur']) win.on(change, syncMini)
   // Logging in shouldn't throw a window at anyone who asked him to wake up alone.
-  const background = process.argv.includes(LOGIN_ARGS[0]) && config.autoActivate === true
+  // Nor at anyone a scheduled reminder started him for: that one only wants the notification.
+  const background = (process.argv.includes(LOGIN_ARGS[0]) && config.autoActivate === true) || process.argv.includes(REMINDER_ARG)
   win.once('ready-to-show', () => { if (!background) show() })
   try { await win.loadURL(origin) }
   catch (error) {
@@ -275,14 +278,24 @@ async function boot() {
   await createMini()
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 24, height: 24 }))
   tray.setToolTip('JARVIS - assistente pessoal')
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Abrir JARVIS', click: show }, { label: 'Sair do JARVIS', click: () => app.quit() }]))
+  const trayMenu = (update) => Menu.buildFromTemplate([{ label: 'Abrir JARVIS', click: show }, ...(update ? [{ label: `Reiniciar e atualizar para ${update.version}`, click: update.install }] : []), { label: 'Sair do JARVIS', click: () => app.quit() }])
+  tray.setContextMenu(trayMenu())
+  if (app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA) stopUpdater = startUpdater({ log, icon: path.join(__dirname, 'icon.png'), onReady: (version, install) => tray?.setContextMenu(trayMenu({ version, install })) })
   tray.on('double-click', show)
   const notified = new Set()
+  // Only an installed copy may leave a task behind in the Windows scheduler.
+  const scheduleReminder = app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA ? createReminderTask({ exe: process.execPath, log }) : null
   notificationTimer = setInterval(async () => {
     try {
       const response = await fetch(origin + '/assistant/alerts', { headers: { cookie: `jarvis_session=${token}` }, signal: AbortSignal.timeout(3000) })
       const state = await response.json()
-      for (const item of state.notifications) if (!notified.has(item.id)) { notified.add(item.id); new Notification({ title: 'Lembrete do JARVIS', body: item.title, icon: path.join(__dirname, 'icon.png') }).show() }
+      for (const item of state.notifications) if (!notified.has(item.id)) {
+        notified.add(item.id)
+        const notice = new Notification({ title: 'Lembrete do JARVIS', body: item.title, icon: path.join(__dirname, 'icon.png') })
+        notice.on('click', show)
+        notice.show()
+      }
+      void scheduleReminder?.(state.next)
     } catch { /* Keep the app usable while restarting the bridge. */ }
   }, 5000)
   contextTimer = setInterval(async () => {
@@ -309,9 +322,10 @@ async function boot() {
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
-  app.on('second-instance', show)
+  // A scheduled reminder firing while he is already open must not pull the window up.
+  app.on('second-instance', (event, argv) => { if (!argv.includes(REMINDER_ARG)) show() })
   app.on('activate', show)
-  app.on('before-quit', () => { quitting = true; clearInterval(notificationTimer); clearInterval(contextTimer); globalShortcut.unregisterAll(); const orb = mini; mini = null; orb?.destroy(); worker?.kill(); tray?.destroy() })
+  app.on('before-quit', () => { quitting = true; clearInterval(notificationTimer); clearInterval(contextTimer); stopUpdater?.(); globalShortcut.unregisterAll(); const orb = mini; mini = null; orb?.destroy(); worker?.kill(); tray?.destroy() })
   app.on('window-all-closed', () => { if (quitting) app.quit() })
   app.whenReady().then(boot).catch((error) => { log(error.message); dialog.showErrorBox('JARVIS não iniciou', error.message); app.quit() })
 }
