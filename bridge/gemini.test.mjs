@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { geminiQuery } from './gemini.mjs'
+import { claimsAction, geminiQuery } from './gemini.mjs'
 import { uiServer } from './ui.mjs'
 import { displayServer } from './panels.mjs'
 import { visionServer } from './vision.mjs'
@@ -29,7 +29,7 @@ test('a tool called by the name the prompt uses still runs, and a refused one st
     const ai = fakeAI((request) => {
       if (++calls === 1) return chunks({ functionCall: { name: 'ui_reset', args: {} } })
       seen.push(request.contents.at(-1).parts[0].functionResponse.response.isError)
-      return chunks({ text: 'Pronto.' })
+      return chunks({ text: 'Tudo certo.' })
     })
     const effects = []
     const session = geminiQuery({ prompt: messages('Volte ao normal'), options: { ...defaults,
@@ -315,4 +315,41 @@ test('the light model can hand a hard question up to the deep model, once', asyn
     { model: 'gemini-3.5-flash', level: 'LOW', offered: true },
     { model: 'gemini-3-pro', level: 'HIGH', offered: false },
   ])
+})
+
+test('what reads as a claim of an action, and what does not', () => {
+  for (const text of ['Pronto, salvei o lembrete.', 'Abri o Word pra você.', 'Feito! Marquei para sexta.', 'Já excluí o arquivo.']) assert.equal(claimsAction(text), true, text)
+  for (const text of ['Não abri o bloco de notas.', 'Pronto para salvar?', 'Quer que eu abra o arquivo?', 'Machado de Assis nasceu em 1839.', 'Vou salvar isso.']) assert.equal(claimsAction(text), false, text)
+})
+
+test('a claim with nothing done is never said, and the answer is asked for again', async () => {
+  const requests = []
+  const ai = fakeAI((request) => {
+    requests.push(request.config.systemInstruction)
+    return requests.length === 1 ? chunks({ text: 'Pronto, ' }, { text: 'salvei o lembrete. ' }, { text: 'Até amanhã.' }) : chunks({ text: 'Ainda não salvei: preciso da sua confirmação.' })
+  })
+  const said = []
+  for await (const event of geminiQuery({ prompt: messages('me lembra amanhã'), options: defaults }, { ai })) {
+    if (event.type === 'stream_event') said.push(event.event.delta.text)
+    if (event.type === 'result') assert.equal(event.result, 'Ainda não salvei: preciso da sua confirmação.')
+  }
+  assert.equal(said.join(''), 'Ainda não salvei: preciso da sua confirmação.')
+  assert.equal(requests.length, 2)
+  assert.doesNotMatch(requests[0], /nenhuma ação foi executada/)
+  assert.match(requests[1], /nenhuma ação foi executada/)
+})
+
+test('a claim is said when the tool did run, or is called in the same step', async () => {
+  for (const sameStep of [false, true]) {
+    let calls = 0
+    const ai = fakeAI(() => {
+      if (++calls === 1) return sameStep ? chunks({ text: 'Pronto, coloquei tudo no normal e removi o tema. ' }, { functionCall: { name: 'ui_reset', args: {} } }) : chunks({ functionCall: { name: 'ui_reset', args: {} } })
+      return chunks({ text: 'Pronto, removi o tema.' })
+    })
+    const said = []
+    const session = geminiQuery({ prompt: messages('volte ao normal'), options: { ...defaults, mcpServers: { jarvis_ui: uiServer(() => {}) } } }, { ai })
+    for await (const event of session) if (event.type === 'stream_event' && event.event.type === 'content_block_delta') said.push(event.event.delta.text)
+    assert.equal(calls, 2, `no retry (same step: ${sameStep})`)
+    assert.match(said.join(''), /removi o tema\.$/)
+  }
 })
