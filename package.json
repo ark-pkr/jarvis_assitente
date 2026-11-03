@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "1.11.0",
+  "version": "1.11.1",
   "description": "Assistente pessoal por voz para Windows, em português do Brasil, com interface holográfica.",
   "license": "MIT",
   "type": "module",
@@ -37,7 +37,7 @@
     "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
     "desktop:start": "node scripts/run-desktop.mjs",
     "desktop:dist": "npm run desktop:prepare && npm install --omit=dev --ignore-scripts --prefix desktop-app && electron-builder --config electron-builder.cjs --win --x64 --publish never",
-    "desktop:release": "npm run desktop:prepare && npm install --omit=dev --ignore-scripts --prefix desktop-app && electron-builder --config electron-builder.cjs --win --x64 --publish always",
+    "desktop:release": "npm run desktop:dist && node scripts/release.mjs",
     "test:desktop-app": "node bridge/desktop-http.test.mjs",
     "test:electron": "node scripts/check-electron.mjs",
     "test:presence": "node scripts/check-presence.mjs",

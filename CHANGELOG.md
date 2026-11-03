@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 1.11.1
+
+- Corrigido: publicar uma versão nova falhava no meio e deixava de fora o arquivo que avisa o JARVIS da atualização. Agora o envio é feito em ordem, como rascunho, e só vira público quando está completo.
+
 ## 1.11.0
 
 - Atualização automática: novas versões são baixadas do GitHub em segundo plano e instaladas quando você sai do JARVIS. O menu da bandeja ganha **Reiniciar e atualizar**.
