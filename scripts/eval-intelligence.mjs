@@ -4,6 +4,11 @@
  *   npm run test:intelligence -- antes
  *   npm run test:intelligence -- depois        (compares with the last saved run)
  *   npm run test:intelligence -- depois nome   (only the cases named)
+ *   npm run test:intelligence -- depois --vezes=3   (each case three times: a case passes
+ *                                                  only when every run does)
+ *
+ * Cases with a `judge` criterion are also read by a second model (eval-judge.mjs),
+ * which costs one more call per run of those cases.
  *
  * Runs its own bridge on throwaway data, and refuses every approval, so nothing
  * here touches this computer's records or apps. Each run costs model calls.
@@ -14,10 +19,11 @@ import path from 'node:path'
 import os from 'node:os'
 import { WebSocket } from 'ws'
 import { CASES } from './eval-cases.mjs'
+import { judge, parseArgs } from './eval-judge.mjs'
 import { chooseResponsePace } from '../src/lib/responsePace.ts'
 
 const PORT = 18797
-const [label = 'atual', ...only] = process.argv.slice(2)
+const { label, only, times } = parseArgs(process.argv.slice(2))
 const results = path.resolve('.ui-check.local/eval')
 const ORIGIN = 'http://localhost:5173'
 const TURN_MS = 60000
@@ -89,19 +95,33 @@ try {
   await waitFor(async () => (await fetch(`http://127.0.0.1:${PORT}/health`)).status < 500)
   let client = await connect()
   for (const item of CASES.filter((entry) => !only.length || only.includes(entry.id))) {
-    let context = []
-    let last = { text: '', tools: [] }
+    let passes = 0
+    let shown = null
     const began = Date.now()
-    for (const step of item.steps) {
-      if (step.newChat) { context = []; await client.close(); client = await connect() }
-      last = await client.ask(step.text, context)
-      context = [...context, { role: 'user', text: step.text }, { role: 'jarvis', text: last.text }]
-      if (step.endChat) { await client.close(); client = await connect() }
-      if (step.settle) await new Promise((resolve) => setTimeout(resolve, step.settle))
+    for (let run = 0; run < times; run++) {
+      let context = []
+      let last = { text: '', tools: [] }
+      for (const step of item.steps) {
+        if (step.newChat) { context = []; await client.close(); client = await connect() }
+        last = await client.ask(step.text, context)
+        context = [...context, { role: 'user', text: step.text }, { role: 'jarvis', text: last.text }]
+        if (step.endChat) { await client.close(); client = await connect() }
+        if (step.settle) await new Promise((resolve) => setTimeout(resolve, step.settle))
+      }
+      const faults = grade(item, last)
+      if (item.judge && !last.error) {
+        const verdict = await judge({ criterion: item.judge, conversation: context.slice(0, -1), answer: last.text })
+        if (!verdict.passed) faults.push(`juiz: ${verdict.reason}`)
+      }
+      if (!faults.length) passes++
+      // A failure says more than a pass, so it is the run that is kept and shown.
+      if (!shown || faults.length) shown = { faults, last }
     }
-    const faults = grade(item, last)
-    report.push({ id: item.id, area: item.area, passed: !faults.length, faults, ms: Date.now() - began, tools: last.tools, text: last.text.slice(0, 400) })
-    console.log(`${faults.length ? 'FALHOU' : 'ok    '} ${item.area.padEnd(13)} ${item.id.padEnd(20)} ${((Date.now() - began) / 1000).toFixed(1).padStart(5)} s ${faults.join('; ').slice(0, 110)}`)
+    const { faults, last } = shown
+    const ms = Math.round((Date.now() - began) / times)
+    report.push({ id: item.id, area: item.area, passed: passes === times, runs: times, passes, faults, ms, tools: last.tools, text: last.text.slice(0, 400) })
+    const rate = times > 1 ? ` ${passes}/${times}` : ''
+    console.log(`${passes === times ? 'ok    ' : 'FALHOU'} ${item.area.padEnd(13)} ${item.id.padEnd(20)}${rate} ${(ms / 1000).toFixed(1).padStart(5)} s ${faults.join('; ').slice(0, 110)}`)
     if (faults.length) console.log(`       disse: ${last.text.replace(/\s+/g, ' ').slice(0, 200) || '(nada)'}`)
   }
   await client.close()
@@ -116,7 +136,8 @@ const areas = [...new Set(report.map((entry) => entry.area))].map((area) => {
   const own = report.filter((entry) => entry.area === area)
   return `${area} ${own.filter((entry) => entry.passed).length}/${own.length}`
 })
-console.log(`\n${label}: ${passed}/${report.length} | ${areas.join(' | ')}`)
+const rate = times > 1 ? ` (acertos em ${times} rodadas: ${report.reduce((sum, entry) => sum + entry.passes, 0)}/${report.length * times})` : ''
+console.log(`\n${label}: ${passed}/${report.length}${rate} | ${areas.join(' | ')}`)
 await fs.mkdir(results, { recursive: true })
 const previous = (await fs.readdir(results).catch(() => [])).sort().at(-1)
 if (previous && !only.length) {
@@ -125,4 +146,4 @@ if (previous && !only.length) {
   const change = (from, to) => report.filter((entry) => was.get(entry.id) === from && entry.passed === to).map((entry) => entry.id)
   console.log(`contra ${before.label}: ${before.passed}/${before.report.length} antes. Melhorou: ${change(false, true).join(', ') || 'nada'}. Piorou: ${change(true, false).join(', ') || 'nada'}.`)
 }
-if (!only.length) await fs.writeFile(path.join(results, `${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}-${label}.json`), JSON.stringify({ label, passed, report }, null, 2))
+if (!only.length) await fs.writeFile(path.join(results, `${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}-${label}.json`), JSON.stringify({ label, passed, times, report }, null, 2))
