@@ -21,6 +21,19 @@ export const OPEN_TOOLS_DECLARATION = {
   parametersJsonSchema: { type: 'object', properties: {} },
 }
 
+/**
+ * The model's own way up to the deep model. `isHardRequest` only knows the words of
+ * a hard question, and "vale a pena trocar de faculdade agora?" has none of them.
+ * The light model can tell it is out of its depth far better than a regex can.
+ */
+export const THINK_HARDER = 'pensar_melhor'
+
+export const THINK_HARDER_DECLARATION = {
+  name: THINK_HARDER,
+  description: 'Passa este pedido para um raciocínio mais profundo. Chame ANTES de responder quando a resposta depender de cálculo com vários passos, lógica, comparação de opções, decisão importante para o usuário, diagnóstico de um erro ou qualquer coisa em que você não tenha certeza. Não chame para conversa, fatos simples ou ações diretas.',
+  parametersJsonSchema: { type: 'object', properties: {} },
+}
+
 export const PARTIAL_TOOLS_NOTE = `Só parte das ferramentas está carregada neste pedido. Use as que estão disponíveis sempre que servirem. Chame ${OPEN_TOOLS} somente se nenhuma delas fizer o que foi pedido e a resposta exigir uma ação ou um dado que você não tenha. Para perguntas de conhecimento geral e conversa, responda direto. Só use painéis quando o usuário pedir para ver algo.`
 
 /** At or under this, a request may lean on the previous exchange for its topic. */

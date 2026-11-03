@@ -102,6 +102,7 @@ try {
     const faults = grade(item, last)
     report.push({ id: item.id, area: item.area, passed: !faults.length, faults, ms: Date.now() - began, tools: last.tools, text: last.text.slice(0, 400) })
     console.log(`${faults.length ? 'FALHOU' : 'ok    '} ${item.area.padEnd(13)} ${item.id.padEnd(20)} ${((Date.now() - began) / 1000).toFixed(1).padStart(5)} s ${faults.join('; ').slice(0, 110)}`)
+    if (faults.length) console.log(`       disse: ${last.text.replace(/\s+/g, ' ').slice(0, 200) || '(nada)'}`)
   }
   await client.close()
 } finally {

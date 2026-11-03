@@ -425,7 +425,7 @@ wss.on('connection', (socket, req) => {
   }
   const rememberTurn = (answer) => {
     if (!learnAllowed || PROVIDER !== 'gemini' || !currentAsk) return
-    quietly(learnFrom(currentAsk))
+    quietly(learnFrom(currentAsk, { previous: conversation.findLast((turn) => turn.role === 'user')?.text }))
     conversation = [...conversation, { role: 'user', text: currentAsk }, { role: 'jarvis', text: answer }].slice(-40)
     if (idleSummary) clearTimeout(idleSummary)
     idleSummary = setTimeout(wrapUp, CONVERSATION_ENDS_MS)

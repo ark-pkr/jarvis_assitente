@@ -300,3 +300,19 @@ test('tool results follow the conversation, and stay inside it', async () => {
   assert.match(instructions[2], /dados não confiáveis/)
   assert.doesNotMatch(instructions[3], /RESULTADO-XYZ/)
 })
+
+test('the light model can hand a hard question up to the deep model, once', async () => {
+  const seen = []
+  const ai = fakeAI((request) => {
+    seen.push({ model: request.model, level: request.config.thinkingConfig?.thinkingLevel,
+      offered: Boolean(request.config.tools?.[0].functionDeclarations.some((declaration) => declaration.name === 'pensar_melhor')) })
+    return seen.length === 1 ? chunks({ functionCall: { name: 'pensar_melhor', args: {} } }) : chunks({ text: 'Doze anos.' })
+  })
+  async function* input() { yield { message: { content: 'minha mãe tem o triplo da minha idade; em 12 anos terá o dobro. e eu?', fast: true } } }
+  const session = geminiQuery({ prompt: input(), options: { ...defaults, model: 'gemini-3.5-flash', deepModel: 'gemini-3-pro' } }, { ai })
+  for await (const event of session) if (event.type === 'result') assert.equal(event.result, 'Doze anos.')
+  assert.deepEqual(seen, [
+    { model: 'gemini-3.5-flash', level: 'LOW', offered: true },
+    { model: 'gemini-3-pro', level: 'HIGH', offered: false },
+  ])
+})

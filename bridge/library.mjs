@@ -46,6 +46,18 @@ export function similarity(a, b) {
   return left && right ? dot / Math.sqrt(left * right) : 0
 }
 
+/**
+ * One list of numbers per text. Handed bare strings, the model reads them as parts of
+ * one text and returns a single embedding for the lot, so each goes as its own content.
+ */
+export async function embedTexts(texts, purpose, signal) {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  const { embeddings } = await ai.models.embedContent({ model: MODEL(), contents: texts.map((text) => ({ parts: [{ text }] })),
+    config: { taskType: purpose, outputDimensionality: 768, ...(signal ? { abortSignal: signal } : {}) } })
+  if (embeddings?.length !== texts.length) throw new Error(`Esperava ${texts.length} embeddings e vieram ${embeddings?.length ?? 0}.`)
+  return embeddings.map((item) => item.values)
+}
+
 const encode = (vector) => Buffer.from(new Float32Array(vector).buffer).toString('base64')
 const decode = (text) => { const bytes = Buffer.from(text, 'base64'); return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4) }
 
@@ -54,11 +66,7 @@ export class Library {
     this.file = path.join(directory, 'library.json')
     this.files = files
     this.pdf = new PdfLessons(files)
-    this.embed = embed ?? (async (texts, purpose) => {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-      const { embeddings } = await ai.models.embedContent({ model: MODEL(), contents: texts, config: { taskType: purpose, outputDimensionality: 768 } })
-      return embeddings.map((item) => item.values)
-    })
+    this.embed = embed ?? embedTexts
   }
   async read() {
     try { return JSON.parse(await fs.readFile(this.file, 'utf8')) }
@@ -96,7 +104,9 @@ export class Library {
       const key = `${rootId}:${file}`
       const stat = await fs.stat(await this.files.resolve(rootId, file)).catch(() => null)
       if (!stat) { skipped++; continue }
-      if (index.files[key] === stat.mtimeMs) continue
+      // A file indexed while every batch came back as one embedding has passages
+      // without numbers, and has to be read again even though it did not change.
+      if (index.files[key] === stat.mtimeMs && !index.chunks.some((chunk) => chunk.key === key && !chunk.vector)) continue
       let parts
       try { parts = await this.passages(rootId, file, signal) }
       catch { skipped++; continue }

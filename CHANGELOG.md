@@ -12,6 +12,12 @@
 
 Câmera, estrelas, planetas e sons podem ser desligados em **Áudio**.
 
+**Mais inteligente**
+- Quando percebe que a pergunta é difícil (uma conta com vários passos, uma decisão, um erro para diagnosticar), ele mesmo passa para o modelo mais forte e pensa com calma, mesmo sem as palavras que antes acionavam isso.
+- A memória entende o sentido: “minha companheira” encontra “namora a Júlia”, e uma conversa antiga sobre o mesmo assunto volta junto com as recentes.
+- Correções e orientações viram aprendizado: “não, eu quis dizer em Balsas” ou “da próxima vez não precisa abrir o painel” ficam guardados, entendidos a partir do que você tinha pedido antes.
+- Corrigido: ao indexar suas pastas, só o primeiro trecho de cada lote recebia o índice de significado. Pastas já indexadas são relidas na próxima indexação.
+
 ## 1.8.0
 
 **Seus dados protegidos**

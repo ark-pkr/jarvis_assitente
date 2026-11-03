@@ -243,3 +243,61 @@ test('only words that point at something read the window', () => {
   for (const said of ['resume isso', 'o que esse erro significa?', 'traduz esse texto', 'explica essa tela', 'o que é isso aqui?']) assert.equal(pointsAtSomething(said), true, said)
   for (const said of ['qual a capital da França', 'isso é tudo, obrigado por hoje e até amanhã']) assert.equal(pointsAtSomething(said), false, said)
 })
+
+/** Themes become axes, so "companheira" can be made to mean "namora". */
+const fakeMeaning = async (texts) => texts.map((text) => [/companheira|namora/i.test(text) ? 1 : 0, /time|flamengo/i.test(text) ? 1 : 0, /cidade|mora em/i.test(text) ? 1 : 0, .01])
+
+test('memory finds a fact said in other words, and keeps no numbers of what it forgot', async () => {
+  const directory = await temp()
+  const memory = new Learned(directory, fakeMeaning)
+  await memory.apply({ add: ['O usuário namora a Júlia', 'O usuário torce para o Flamengo'] })
+  await memory.index()
+  const state = await memory.read()
+  assert.equal(search(state, 'como se chama minha companheira?').length, 0, 'no word in common')
+  const meaning = await memory.meaning('como se chama minha companheira?', state)
+  assert.deepEqual(search(state, 'como se chama minha companheira?', 8, meaning).map((item) => item.text), ['O usuário namora a Júlia'])
+  const julia = state.facts.find((fact) => /Júlia/.test(fact.text))
+  memory.embed = async () => { throw new Error('sem rede') }
+  await memory.forget(julia.id)
+  assert.deepEqual(Object.keys(await memory.readVectors()), state.facts.filter((fact) => fact !== julia).map((fact) => fact.id), 'pruned even offline')
+  await memory.clear()
+  assert.deepEqual(await memory.readVectors(), {})
+})
+
+test('without the numbers in time, memory falls back to words', async () => {
+  const memory = new Learned(await temp(), async () => { throw new Error('sem rede') })
+  await memory.apply({ add: ['O usuário mora em Balsas'] })
+  const state = await memory.read()
+  assert.equal(await memory.meaning('onde eu vivo?', state), null)
+  assert.match(await learnedNotes(true, 'onde moro', memory), /Balsas/)
+})
+
+test('an older conversation on the same subject comes back beside the recent ones', () => {
+  const summary = (id, title, at) => ({ id, title, text: `Conversa sobre ${title}`, at })
+  const state = { facts: [], words: [], followups: [], summaries: [summary('a', 'receita de bolo', 9), summary('b', 'futebol', 8), summary('c', 'viagem', 7), summary('d', 'tema do TCC reconhecimento de voz', 1)] }
+  assert.match(contextFor(state, 'qual era o tema do TCC mesmo?'), /anteriores sobre este assunto:\n- .*TCC/)
+  assert.doesNotMatch(contextFor(state, 'oi'), /anteriores sobre este assunto/)
+})
+
+test('a correction is read beside what they had asked, and nothing else is', async () => {
+  const sent = []
+  const ai = { models: { generateContent: async (request) => { sent.push(request.contents); return { text: JSON.stringify({ add: ['O usuário quer o tempo de Balsas'], remove: [], words: [], followups: [] }) } } } }
+  const memory = new Learned(await temp(), fakeMeaning)
+  await learnFrom('não, eu quis dizer em Balsas', { memory, ai, previous: 'como vai estar o tempo amanhã?' })
+  assert.match(sent[0], /Pedido anterior do usuário[^\n]*\ncomo vai estar o tempo amanhã\?/)
+  await learnFrom('eu moro em Balsas', { memory, ai, previous: 'como vai estar o tempo amanhã?' })
+  assert.doesNotMatch(sent[1], /Pedido anterior/, 'not a correction')
+  assert.equal(worthLearning('da próxima vez não precisa abrir o painel'), true)
+})
+
+test('a passage indexed without its numbers is read again', async () => {
+  const { directory, files } = await shelf()
+  const books = new Library({ directory, files, embed: async (texts) => [(await fakeEmbed(texts))[0]] })
+  await books.indexRoot('r')
+  books.embed = fakeEmbed
+  assert.equal((await books.indexRoot('r')).indexed, 0, 'one passage per file here, so every one got its numbers')
+  const index = await books.read()
+  index.chunks[0].vector = ''
+  await books.write(index)
+  assert.equal((await books.indexRoot('r')).indexed, 1)
+})

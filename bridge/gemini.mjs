@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { turnCost } from './metrics.mjs'
-import { isHardRequest, OPEN_TOOLS, OPEN_TOOLS_DECLARATION, PARTIAL_TOOLS_NOTE, routeTools } from './tool-routing.mjs'
+import { isHardRequest, OPEN_TOOLS, OPEN_TOOLS_DECLARATION, PARTIAL_TOOLS_NOTE, routeTools, THINK_HARDER, THINK_HARDER_DECLARATION } from './tool-routing.mjs'
 
 const NOTE_CHARS = 1200
 const NOTES_KEPT = 6
@@ -148,7 +148,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
         // Null means every tool. Set once per request, and widened for good by
         // the first abrir_ferramentas, so a turn only ever gains tools.
         let routed = options.routeTools ? routeTools(user.message) : null
-        const hard = Boolean(options.deepModel) && isHardRequest(user.message)
+        let hard = Boolean(options.deepModel) && isHardRequest(user.message)
         let model = hard ? options.deepModel : routed && options.lightModel ? options.lightModel : options.model
         try {
           ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
@@ -159,6 +159,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
               name, description: `${original}: ${tool.description ?? ''}`, parametersJsonSchema: tool.inputSchema,
             }))
             if (routed) declarations.push(OPEN_TOOLS_DECLARATION)
+            if (options.deepModel && !hard) declarations.push(THINK_HARDER_DECLARATION)
             const request = () => ai.models.generateContentStream({
               model, contents: history,
               config: {
@@ -219,6 +220,13 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
             const responses = []
             for (const { functionCall: call } of calls) {
               signal.throwIfAborted()
+              if (call.name === THINK_HARDER) {
+                // For the rest of the turn: the deep model, thinking at length.
+                hard = true
+                model = options.deepModel
+                responses.push({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { isError: false, content: [{ type: 'text', text: 'Raciocínio profundo ativado. Pense passo a passo, confira o resultado e só então responda.' }] } } })
+                continue
+              }
               if (call.name === OPEN_TOOLS) {
                 routed = null
                 if (!hard) model = options.model

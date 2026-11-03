@@ -8,7 +8,8 @@ export function memoryServer(ask, memory = learned) {
     tool('memory_recall', 'Consulta o que você aprendeu sobre o usuário e o resumo de conversas passadas. Use para "o que você sabe sobre mim", "o que combinamos" e "aquele assunto de ontem". Com query vazia, lista o que há de mais recente. Não pede confirmação.',
       { query: z.string().max(200).default('') }, async ({ query }) => {
         const state = await memory.read()
-        return text(query.trim() ? search(state, query) : { facts: state.facts.slice(0, 30).map(({ id, text: fact }) => ({ id, fact })), conversations: state.summaries.slice(0, 8).map(({ id, title, text: summary, at }) => ({ id, title, summary, at })) })
+        const meaning = query.trim() && memory.meaning ? await memory.meaning(query, state, 3000) : null
+        return text(query.trim() ? search(state, query, 8, meaning) : { facts: state.facts.slice(0, 30).map(({ id, text: fact }) => ({ id, fact })), conversations: state.summaries.slice(0, 8).map(({ id, title, text: summary, at }) => ({ id, title, summary, at })) })
       }),
     tool('memory_forget', 'Esquece um fato ou conversa consultados com memory_recall, após confirmação.',
       { id: z.string().min(1).max(100), description: z.string().min(1).max(240) }, async ({ id, description }) => {
