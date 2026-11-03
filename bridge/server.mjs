@@ -56,6 +56,7 @@ import { isMediaRequest, serveMedia } from './media-routes.mjs'
 import { recordTurn } from './metrics.mjs'
 import { handleBackup } from './backup.mjs'
 import { handleDiagnostics, watchLogs } from './diagnostics.mjs'
+import { createOriginPolicy, corsFor } from './origins.mjs'
 
 watchLogs()
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
@@ -70,53 +71,7 @@ process.on('unhandledRejection', (err) => {
   console.error('[jarvis] unhandled rejection:', err)
 })
 
-/**
- * Who is allowed to talk to this bridge.
- *
- * A WebSocket handshake is not subject to the same-origin policy: the browser
- * sends it on behalf of whatever page asked, no preflight stands in the way,
- * and the page reads every byte that comes back. Without a check here, any tab
- * the user happens to have open could open a socket to ws://localhost:8787,
- * drive the agent with every MCP server on this machine, and read back every
- * token and panel. The Origin header is the only thing that separates our own
- * dev server from someone else's page, so it is checked explicitly.
- *
- * A missing Origin means a non-browser client — curl, a script, a native app.
- * That is also exactly what local malware looks like, so it is refused on the
- * socket unless JARVIS_ALLOW_NO_ORIGIN=1 says otherwise.
- */
-const EXTRA_ORIGINS = new Set(
-  (process.env.JARVIS_ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((s) => s.trim().replace(/\/+$/, ''))
-    .filter(Boolean),
-)
-const ALLOW_NO_ORIGIN = process.env.JARVIS_ALLOW_NO_ORIGIN === '1'
-
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
-
-/**
- * Vite takes the next free port when 5173 is busy and `vite preview` starts at
- * 4173, so the dev ranges are allowed rather than two exact numbers. Anything
- * else — including localhost on a port some other app is serving — has to be
- * named in JARVIS_ALLOWED_ORIGINS.
- */
-const isDevPort = (port) =>
-  (port >= 5173 && port <= 5199) || (port >= 4173 && port <= 4199)
-
-function originAllowed(origin) {
-  if (!origin) return ALLOW_NO_ORIGIN
-  if (EXTRA_ORIGINS.has(origin.replace(/\/+$/, ''))) return true
-  let url
-  try {
-    url = new URL(origin)
-  } catch {
-    return false
-  }
-  if (url.protocol !== 'http:') return false
-  if (!LOCAL_HOSTS.has(url.hostname)) return false
-  return isDevPort(Number(url.port))
-}
+const { originAllowed, describe: describeOrigins } = createOriginPolicy()
 
 /**
  * The orchestrator model. Override with JARVIS_MODEL to trade quality for pace
@@ -181,25 +136,6 @@ function configuredServers() {
 }
 
 const MCP_SERVERS = configuredServers()
-
-/**
- * CORS, reflected rather than wildcarded.
- *
- * `*` on this origin means any page on the internet can read whatever the
- * bridge serves, so the same allowlist that guards the socket picks the
- * header. A request carrying an Origin we don't know is refused outright —
- * but a request with no Origin at all is served, because an <img src> load
- * (which is how panels fetch screenshots) never sends one.
- */
-function corsFor(req) {
-  const origin = req.headers.origin
-  const headers = { vary: 'origin' }
-  if (origin) {
-    headers['access-control-allow-origin'] = origin
-    headers['access-control-allow-headers'] = 'content-type'
-  }
-  return headers
-}
 
 // One HTTP server for both the speech proxy and the WebSocket upgrade.
 const http = await import('node:http')
@@ -321,11 +257,7 @@ void chromeAvailable().then((ok) => {
   )
 })
 
-console.log(
-  '[jarvis] accepting local dev origins' +
-    (EXTRA_ORIGINS.size ? ` plus ${[...EXTRA_ORIGINS].join(', ')}` : '') +
-    (ALLOW_NO_ORIGIN ? ' and clients that send no origin' : ''),
-)
+console.log(describeOrigins())
 
 /**
  * What to tell the browser when a turn ends badly. Plain sentences, because

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Scene } from './scene/Scene'
-import { setCinema, useCinema } from './lib/cinema'
 import { Hud } from './ui/Hud'
 import { MissionControl } from './ui/MissionControl'
 import { WorkspacePanel } from './ui/WorkspacePanel'
-import { useWorkspace, flushWorkspace } from './workspace'
+import { setCinema } from './lib/cinema'
+import { useWorkspace } from './workspace'
+import { useSessionSync } from './app/useSessionSync'
+import { createShortcutHandler } from './app/shortcuts'
+import { BARE_NAME, LEADING_NAME } from './app/wakeName'
 import { Boot } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
@@ -34,12 +37,10 @@ import {
   watchUi,
   watchConnection,
   connectedLabels,
-  usingBridge,
-  type Msg,
 } from './lib/brain'
 import { startAnalyser, stopMicrophone, micLevel } from './lib/audio'
 import { probeCapabilities } from './lib/capabilities'
-import { BRIDGE_HTTP_URL, env } from './config'
+import { BRIDGE_HTTP_URL } from './config'
 
 /**
  * The conversation.
@@ -66,13 +67,6 @@ const newId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `id${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 
-/** The same mishearings voice.ts accepts for the wake word — otherwise a turn
- *  that woke him as "travis" gets that word sent on to the model as a question. */
-const NAME = '(?:jarvis|jarvys|jervis|jarviss|jarv|járvis|jarves)'
-/** A bare vocative — "Jarvis", "hey jarvis" — with nothing asked. */
-const BARE_NAME = new RegExp(`^(?:oi|olá|ola|ei)?\\s*${NAME}[\\s,.!?]*$`, 'i')
-/** A leading vocative on a real command: "Jarvis, what's the weather". */
-const LEADING_NAME = new RegExp(`^(?:oi|olá|ola|ei)?\\s*${NAME}\\b[\\s,.:!?-]*`, 'i')
 /** Called during a class, he listens for this long and goes back to writing it down. */
 const LECTURE_EAR_MS = 12000
 const NUDGE_CHECK_MS = 5 * 60000
@@ -81,7 +75,6 @@ export default function App() {
   const store = useStore
   const phase = useStore((s) => s.phase)
   const privacyMode = useWorkspace((s) => s.settings.privacyMode)
-  const history = useRef<Msg[]>([])
   const speaker = useRef<ReturnType<typeof createSpeaker> | null>(null)
   const voice = useRef<Voice | null>(null)
   const privacyActions = useRef<{
@@ -111,22 +104,7 @@ export default function App() {
   /** Until when he takes what he hears as meant for him during a class. */
   const lectureEar = useRef(0)
 
-  useEffect(() => {
-    const restore = () => {
-      const workspace = useWorkspace.getState()
-      store.setState({ turns: workspace.sessions.find((s) => s.id === workspace.active)?.turns ?? [], panels: [], blades: [] })
-    }
-    restore()
-    const save = store.subscribe((state, previous) => {
-      if (state.turns !== previous.turns && !useWorkspace.getState().settings.privacyMode) {
-        useWorkspace.getState().saveTurns(state.turns)
-      }
-    })
-    const switched = useWorkspace.subscribe((state, previous) => {
-      if (state.active !== previous.active) restore()
-    })
-    return () => { save(); switched(); flushWorkspace() }
-  }, [store])
+  useSessionSync()
 
   // -- helpers --------------------------------------------------------------
 
@@ -256,7 +234,7 @@ export default function App() {
         store.getState().setCaption(line)
         spk.sayFast(line)
       }, 1800)
-      const { text } = await ask(said, history.current, {
+      await ask(said, {
         onTone: (tone) => { if (!stale()) spk.setTone(tone) },
         onText: (delta) => {
           if (stale()) return
@@ -298,16 +276,6 @@ export default function App() {
       }, { fast: pace.fast, article: isArticleRequest(said) })
 
       if (stale()) return
-
-      // The bridge keeps conversation state in its own session, so history is
-      // only threaded through on the direct path.
-      if (!usingBridge && !useWorkspace.getState().settings.privacyMode) {
-        history.current.push({ role: 'user', content: said })
-        history.current.push({ role: 'assistant', content: text || '…' })
-        if (history.current.length > 16) {
-          history.current = history.current.slice(-16)
-        }
-      }
 
       await spk.end()
       if (stale()) return
@@ -870,11 +838,6 @@ export default function App() {
     })
     const warming = warm().catch((err: Error) => s.setError(err.message))
 
-    if (!usingBridge && !env.anthropicKey) {
-      s.setError(
-        'Sem chave da API: copie .env.example para .env.local e preencha VITE_ANTHROPIC_API_KEY.',
-      )
-    }
 
     // Long enough for the four-beat start-up sequence in Boot.tsx to play —
     // status bar, rings, suit schematic, reactor power-up — before the live
@@ -995,27 +958,10 @@ export default function App() {
     const stopLecture = () => { void endLecture() }
     window.addEventListener('jarvis:end-lecture', stopLecture)
 
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName
-      // Above the check below: a button keeps the focus after a click, and the key means nothing to it.
-      if (e.key.toLowerCase() === 'c' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !(e.target as HTMLElement)?.isContentEditable) {
-        e.preventDefault()
-        setCinema(!useCinema.getState().on)
-        return
-      }
-      if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(tag) || (e.target as HTMLElement)?.isContentEditable) return
-
-      // V auditions the next British voice installed on this machine. Which
-      // ones exist varies per Mac, so hearing them beats trusting a ranking.
-      // Bare V only — ⌘V and ⌃V are paste, and swallowing those was rude.
-      if (
-        e.key === 'v' &&
-        !e.repeat &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey
-      ) {
-        e.preventDefault()
+    const onKey = createShortcutHandler({
+      // V auditions the next voice installed on this machine. Which ones exist
+      // varies per computer, so hearing them beats trusting a ranking.
+      nextVoice: () => {
         const name = cycleVoice()
         store.getState().setVoice(name)
         silence()
@@ -1023,15 +969,10 @@ export default function App() {
         speaker.current = demo
         demo.say('Voz em português selecionada. À sua disposição, senhor.')
         void demo.end()
-        return
-      }
-
-      // T speaks a fixed line, bypassing the wake word, the recogniser and the
-      // model entirely. When "I can't hear him" is the report, this is the one
-      // keypress that separates a broken voice engine from a broken voice loop
-      // — and it prints the verdict rather than making you infer it.
-      if (e.key === 't' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
+      },
+      // T bypasses the wake word, the recogniser and the model entirely, and
+      // prints the verdict rather than making you infer it.
+      testAudio: () => {
         silence()
         const t = createSpeaker()
         speaker.current = t
@@ -1045,24 +986,10 @@ export default function App() {
             )
           }
         })
-        return
-      }
-
-      // Escape stands the whole thing down — the one thing the old build had
-      // no key for at all.
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        if (useCinema.getState().on) setCinema(false)
-        else if (store.getState().phase !== 'offline') goDormant()
-        return
-      }
-
-      // Space starts a turn without the wake word. Worth using while filming so
-      // a missed wake word doesn't cost a take.
-      if (e.code !== 'Space' || e.repeat) return
-      e.preventDefault()
-      activate()
-    }
+      },
+      standDown: () => { if (store.getState().phase !== 'offline') goDormant() },
+      activate,
+    })
     window.addEventListener('keydown', onKey)
 
     return () => {

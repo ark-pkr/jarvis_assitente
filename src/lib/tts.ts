@@ -3,7 +3,6 @@ import { createStretcher, type Stretcher } from './timeStretch'
 import {
   env,
   USE_ELEVENLABS,
-  BACKEND,
   BRIDGE_HTTP_URL,
 } from '../config'
 import { caps } from './capabilities'
@@ -869,17 +868,15 @@ export function createSpeaker(): Speaker {
 /** Only used when USE_ELEVENLABS is on. Bridge proxy first (it already holds
  *  the key), then a direct key, then null to fall back to the native voice. */
 async function fetchCloudAudio(text: string): Promise<string | null> {
-  if (BACKEND === 'bridge') {
-    try {
-      const res = await fetch(`${BRIDGE_HTTP_URL}/tts`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text }),
-      })
-      if (res.ok) return URL.createObjectURL(await res.blob())
-    } catch {
-      /* fall through */
-    }
+  try {
+    const res = await fetch(`${BRIDGE_HTTP_URL}/tts`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (res.ok) return URL.createObjectURL(await res.blob())
+  } catch {
+    /* fall through */
   }
 
   if (env.elevenKey) {
