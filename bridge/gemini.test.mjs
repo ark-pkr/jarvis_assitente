@@ -317,6 +317,27 @@ test('the light model can hand a hard question up to the deep model, once', asyn
   ])
 })
 
+test('a long conversation goes compacted, and is summarised after the answer', async () => {
+  const context = Array.from({ length: 30 }, (_, i) => ({ role: i % 2 ? 'jarvis' : 'user', text: `${i}: ${'y'.repeat(2000)}` }))
+  let sentChars = 0
+  const summarised = []
+  const ai = {
+    models: {
+      generateContentStream: async (request) => {
+        sentChars = request.contents.reduce((total, content) => total + content.parts.reduce((sum, part) => sum + (part.text?.length ?? 0), 0), 0)
+        return chunks({ text: 'Certo.' })
+      },
+      generateContent: async (request) => { summarised.push(request.contents); return { text: 'Resumo.' } },
+    },
+  }
+  async function* input() { yield { message: { content: 'e o próximo?', context } } }
+  for await (const _ of geminiQuery({ prompt: input(), options: defaults }, { ai })) { /* drained */ }
+  assert.ok(sentChars < 25000, `sent ${sentChars} characters of 60000`)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(summarised.length, 1)
+  assert.match(summarised[0], /^Usuário: 0:/)
+})
+
 test('a turn reports its steps, its tools and its deep thinking, and says when it starts to think', async () => {
   let calls = 0
   const ai = fakeAI(() => {

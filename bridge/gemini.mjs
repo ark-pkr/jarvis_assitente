@@ -5,6 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { turnCost } from './metrics.mjs'
+import { compactConversation, ConversationSummary, summariser } from './conversation.mjs'
 import { isHardRequest, OPEN_TOOLS, OPEN_TOOLS_DECLARATION, PARTIAL_TOOLS_NOTE, routeTools, THINK_HARDER, THINK_HARDER_DECLARATION } from './tool-routing.mjs'
 
 const NOTE_CHARS = 1200
@@ -63,6 +64,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
   let notes = []
   let lastAnswer = ''
   let settled = false
+  const summary = dependencies.summary ?? new ConversationSummary()
 
   /**
    * Declarations go out as tool_N, and the prompt talks about tools by their real
@@ -141,8 +143,12 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
         // Another conversation, or a private turn: what the tools said belongs
         // to the conversation that asked, so it does not carry across.
         if (Array.isArray(context) && context.at(-1)?.text !== lastAnswer) notes = []
+        // The older part of a long conversation, still to be summarised after this answer.
+        let older = null
         if (Array.isArray(context)) {
-          history.splice(0, history.length, ...context.map((entry) => ({
+          const compacted = compactConversation(context, summary)
+          older = compacted.older
+          history.splice(0, history.length, ...compacted.entries.map((entry) => ({
             role: entry.role === 'jarvis' ? 'model' : 'user', parts: [{ text: entry.text }],
           })))
         }
@@ -327,6 +333,8 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
           if (!complete) throw new Error('tool limit')
           if (history.length > 100) history.splice(0, start)
           lastAnswer = answer
+          // Behind the answer, so the next turn of a long conversation finds it ready.
+          if (older) void summary.refresh(older, summariser(ai, options.lightModel ?? options.model))
           notes = [...notes, ...turnNotes].slice(-NOTES_KEPT)
           usage.totalMs = Date.now() - startedAt
           yield { type: 'result', subtype: 'success', result: answer, usage, total_cost_usd: turnCost(usage) }
