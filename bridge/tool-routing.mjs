@@ -58,6 +58,12 @@ const SERVERS = [
   ['jarvis_chrome', /pesquis|procur|\bbusc|notici|\batual|\bagora\b|\bhoje\b|\bpreco|cotacao|\bsite\b|navegador|\bgoogle\b|internet|\be-?mail|\bquem e\b|resultado|\bjogo\b/],
 ]
 
+/**
+ * Counting days on a calendar, which the light model gets wrong one time in three
+ * ("segunda + 10 dias" came out quarta). Days and longer only: "daqui a 10 minutos"
+ * is a timer, and must stay quick.
+ */
+const DATES = /\bdaqui a \S+ (dias?|semanas?|meses|mes|anos?)\b|\bdentro de \S+ (dias|semanas|meses)\b|\bha \S+ (dias|semanas|meses|anos)\b|\bfaz \S+ (dias|semanas|meses|anos)\b|\bdia da semana\b|\bque dia (sera|foi|cai|caiu|era)\b|\bfaltam? \S+ dias\b|\bquantos dias\b|\bdias? (depois|antes) de\b/
 const SUMS = /\bquanto|\bcalcul|por cento|\bjuros|\bdobro|\btriplo|\bmetade|\btroco|\bsoma|\bmultiplic|\bdivid/
 const REASONING = /\bpor que\b|\bcompar[ae]|\banalis|\bplano de\b|\bestrategi|\barquitetura|\balgoritmo|\bprove\b|\bdemonstr|\bdeduz|\bvantagens\b|\bdepur/
 
@@ -68,7 +74,7 @@ const REASONING = /\bpor que\b|\bcompar[ae]|\banalis|\bplano de\b|\bestrategi|\b
  */
 export function isHardRequest({ content = '' } = {}) {
   const text = plain(content)
-  return REASONING.test(text) || (SUMS.test(text) && (text.match(/\d+/g)?.length ?? 0) >= 2)
+  return REASONING.test(text) || DATES.test(text) || (SUMS.test(text) && (text.match(/\d+/g)?.length ?? 0) >= 2)
 }
 
 /**

@@ -250,6 +250,11 @@ test('a recommendation carries the search that can check its titles', () => {
   assert.match(buildSystemPrompt({ content: 'oi' }), /REAL TITLES/)
 })
 
+test('counting days on a calendar thinks harder, and a timer stays quick', () => {
+  for (const content of ['se hoje é segunda, que dia será daqui a 10 dias?', 'que dia da semana cai 25 de dezembro?', 'faltam quantos dias pro natal?', 'há 3 semanas era que dia?', 'qual a data daqui a duas semanas?']) assert.equal(isHardRequest({ content }), true, content)
+  for (const content of ['me lembra daqui a 10 minutos', 'que dia é hoje?', 'foco de 25 minutos', 'daqui a pouco eu volto']) assert.equal(isHardRequest({ content }), false, content)
+})
+
 test('a failed action tells the model plainly that it did not happen', () => {
   assert.match(failureNote().text, /NÃO foi concluída/)
 })
