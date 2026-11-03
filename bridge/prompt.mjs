@@ -308,7 +308,12 @@ what you did in a few words; never claim to know which app reacted.`
 const CALENDAR = `Calendar: \`calendar_events\` reads the Google Calendar; \`calendar_add\`,
 \`calendar_change\` and \`calendar_remove\` change it, each with its own confirmation.
 Local times are America/Sao_Paulo. Read an event before changing or removing it, and
-ask when a date is ambiguous. If it is not connected, say where to connect it.`
+ask when a date is ambiguous. If it is not connected, say where to connect it.
+"What do I have on Thursday" has three sources, and the calendar is only one: the
+events they told you about (under "Próximos acontecimentos" in what you know of them)
+and their saved reminders come first. Answer from those, then add the calendar when
+it is connected. A disconnected calendar never makes the answer "I don't know" while
+they have told you something about that day.`
 
 const EYES = `Your eyes:
 - \`screen_look\` sees their monitor, after they confirm on screen. Use it only when
@@ -378,7 +383,7 @@ const TOPICS = [
   { text: STUDY, words: /prova|me test[ae]|me pergunt|me examin|\bquiz\b|simulado|\brevis|\baula|professor/ },
   { text: TASKS, words: /segundo plano|me avis|enquanto isso|resultado|o que (voce )?achou/ },
   { text: 'Use memory_recall for what you know about the user and for past conversations.', words: /sabe sobre mim|esquec|combinamos|conversamos|falamos|decidimos|aquele assunto|ontem/ },
-  { text: CALENDAR, words: /agenda|calendario|compromisso|reuni|evento|consulta|\bmarc|desmarc|o que tenho|estou livre|horario livre/ },
+  { text: CALENDAR, words: /agenda|calendario|compromisso|reuni|evento|consulta|\bmarc|desmarc|o que (eu )?tenho|estou livre|horario livre|\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/ },
   { text: ARTICLES, words: /artigo|redacao|\btexto sobre/ },
   { text: FILES, words: /arquivo|pasta|\bpdf\b|documento|material|anotac|apostila|onde (eu )?(falei|li|vi)|indexa|biblioteca/ },
   { text: LESSONS, modes: ['tutor'], words: /\bpdf\b|\baula|ensin|explique|exercicio|materia|\bestud/ },

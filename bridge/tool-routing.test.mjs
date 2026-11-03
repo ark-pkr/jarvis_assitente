@@ -86,7 +86,7 @@ test('a request with a topic declares that server and nothing unrelated', async 
 test('when the words miss, one call brings every tool in and the main model back', async () => {
   const { requests, events } = await run(ask('Faça aquilo de sempre'), (request, step) => step === 1
     ? chunks({ functionCall: { name: OPEN_TOOLS, args: {} } })
-    : chunks({ text: 'Feito.' }))
+    : chunks({ text: 'Tudo certo.' }))
   assert.equal(requests.length, 2)
   assert.equal(requests[1].model, 'principal')
   const declared = names(requests[1])
@@ -95,7 +95,7 @@ test('when the words miss, one call brings every tool in and the main model back
   assert.ok(!declared.includes(OPEN_TOOLS))
   assert.doesNotMatch(requests[1].config.systemInstruction, /Só parte das ferramentas/)
   assert.equal(events.filter((event) => event.type === 'stream_event' && event.event.content_block).length, 0, 'not shown as work')
-  assert.equal(events.at(-1).result, 'Feito.')
+  assert.equal(events.at(-1).result, 'Tudo certo.')
 })
 
 test('a missing light model falls back to the main one instead of failing', async () => {
