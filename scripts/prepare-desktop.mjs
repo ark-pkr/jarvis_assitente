@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { createCanvas } from '@napi-rs/canvas'
+import { changelogSection } from './release.mjs'
 const root = process.cwd()
 const destination = path.join(root, 'desktop-app')
 await fs.mkdir(destination, { recursive: true })
@@ -21,6 +22,10 @@ for (const directory of ['desktop', 'bridge', 'dist']) {
   await fs.rm(target, { recursive: true, force: true })
   await fs.cp(directory, target, { recursive: true, filter: (source) => !source.endsWith('.test.mjs') })
 }
+// What changed in this version, for the "o que mudou" notice after an update. Plain text: no markdown on screen.
+const notes = changelogSection(await fs.readFile(path.join(root, 'CHANGELOG.md'), 'utf8'), pkg.version)
+  .replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^- /gm, '• ')
+await fs.writeFile(path.join(destination, 'desktop', 'novidades.txt'), notes)
 const canvas = createCanvas(256, 256); const c = canvas.getContext('2d')
 c.fillStyle = '#04131b'; c.fillRect(0, 0, 256, 256)
 c.strokeStyle = '#2de6b0'; c.lineWidth = 9; c.shadowColor = '#2de6b0'; c.shadowBlur = 14

@@ -15,7 +15,7 @@ Fechar a janela (o **X**) encerra o JARVIS por completo, inclusive o mini JARVIS
 
 O instalador ainda não tem assinatura digital, então o Windows pode mostrar um aviso de aplicativo desconhecido.
 
-**Atualização automática.** O JARVIS procura versões novas no GitHub ao abrir e a cada seis horas. A nova versão é baixada em segundo plano e instalada quando você fecha o JARVIS, então ele nunca reinicia no meio de uma conversa. A instalação leva cerca de 1 minuto, sem nada na tela: espere antes de abrir de novo. Para instalar na hora, use **Reiniciar e atualizar** no menu da bandeja.
+**Atualização automática.** O JARVIS procura versões novas no GitHub ao abrir e a cada hora. A nova versão é baixada em segundo plano e instalada quando você fecha o JARVIS, então ele nunca reinicia no meio de uma conversa. A instalação leva cerca de 1 minuto, sem nada na tela: se você abrir o JARVIS antes, ele avisa que está sendo atualizado. Depois de atualizar, uma notificação conta o que mudou; a lista fica também em **O que mudou nesta versão**, na bandeja. Para instalar na hora, use **Reiniciar e atualizar** no menu da bandeja.
 
 Requisitos opcionais: Chrome para navegar e pesquisar, Word e VS Code para as integrações, Docker Desktop para executar comandos de projetos.
 
@@ -76,7 +76,7 @@ docker pull rust:1.87-slim
 
 **Aplicativos.** Abre VS Code, Word, Excel e outros, sempre com confirmação. Você pode cadastrar outro `.exe` em **Computador**. Não aceita terminais, instaladores nem argumentos livres, e abrir um aplicativo não dá controle sobre a janela dele.
 
-**Assistente diário.** Em **Central**, registre perfil, projetos, estudos, diário, tarefas, lembretes e rotinas. Diga “onde eu parei?” ou “começar meu dia”. Lembretes com data aparecem como notificação do Windows mesmo depois de **Sair do JARVIS**: ele deixa uma tarefa no Agendador do Windows (“JARVIS Lembrete”) que o abre escondido na bandeja na hora certa. Clicar na notificação abre a janela. Se o computador estiver desligado, o aviso vem assim que ele ligar; o computador não é despertado. Lembretes por contexto comparam o aplicativo em primeiro plano; vêm desligados e não enviam o título da janela à internet.
+**Assistente diário.** Em **Central**, registre perfil, projetos, estudos, diário, tarefas, lembretes e rotinas. Diga “onde eu parei?” ou “começar meu dia”. Lembretes com data aparecem como notificação do Windows mesmo depois de **Sair do JARVIS**: ele deixa uma tarefa no Agendador do Windows (“JARVIS Lembrete”) que o abre escondido na bandeja na hora certa. Clicar na notificação abre a janela. Se o computador estiver desligado, o aviso vem assim que ele ligar. Com **Acordar o computador para lembretes**, em **Aplicativo** (desligado por padrão), o Windows também o tira da suspensão na hora do lembrete. Lembretes por contexto comparam o aplicativo em primeiro plano; vêm desligados e não enviam o título da janela à internet.
 
 **Biblioteca.** Busca texto nas pastas autorizadas com referência de página ou linha. Cada busca dura até 12 segundos, com limite de 30 arquivos, três níveis e dez páginas por PDF.
 

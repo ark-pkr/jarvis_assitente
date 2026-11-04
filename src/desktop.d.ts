@@ -1,11 +1,11 @@
 interface Window {
   jarvisDesktop?: {
     bridgeUrl: string
-    settings: () => Promise<{ configured: boolean; model: string; startOnLogin: boolean; contextReminders: boolean; autoActivate: boolean; clapToStart: boolean; miniOrb: boolean; hotkey: string; hotkeyError: string; localWake: boolean; wakeConfigured: boolean; calendarConnected: boolean }>
+    settings: () => Promise<{ configured: boolean; model: string; startOnLogin: boolean; contextReminders: boolean; wakeForReminders: boolean; autoActivate: boolean; clapToStart: boolean; miniOrb: boolean; hotkey: string; hotkeyError: string; localWake: boolean; wakeConfigured: boolean; calendarConnected: boolean }>
     connectCalendar: (values: { clientId: string; clientSecret: string }) => Promise<void>
     disconnectCalendar: () => Promise<void>
     activeWindow: () => Promise<string>
-    saveSettings: (values: { apiKey?: string; model?: string; startOnLogin?: boolean; contextReminders?: boolean; autoActivate?: boolean; clapToStart?: boolean; miniOrb?: boolean; hotkey?: string; localWake?: boolean; wakeKey?: string }) => Promise<void>
+    saveSettings: (values: { apiKey?: string; model?: string; startOnLogin?: boolean; contextReminders?: boolean; wakeForReminders?: boolean; autoActivate?: boolean; clapToStart?: boolean; miniOrb?: boolean; hotkey?: string; localWake?: boolean; wakeKey?: string }) => Promise<void>
     openExternal: (url: string) => Promise<void>
     copyText: (text: string) => Promise<void>
     setFullScreen: (on: boolean) => Promise<void>

@@ -55,3 +55,24 @@ test('a failed attempt is retried on the next poll', async () => {
   await schedule('2026-11-04T11:30:00.000Z')
   assert.equal(calls.length, 2)
 })
+
+test('waking the computer is off unless asked, and reaches Windows when it changes', async () => {
+  assert.equal(scheduleCommand('2026-11-04T11:30:00.000Z', 'x.exe').env.JARVIS_REMINDER_WAKE, '0')
+  assert.equal(scheduleCommand('2026-11-04T11:30:00.000Z', 'x.exe', true).env.JARVIS_REMINDER_WAKE, '1')
+  assert.ok(decode(scheduleCommand(null, 'x.exe').args).includes('WakeToRun'))
+  const wakes = []
+  let waking = false
+  const run = (file, args, options) => {
+    wakes.push(options.env.JARVIS_REMINDER_WAKE)
+    const child = new EventEmitter()
+    child.stderr = new EventEmitter()
+    setImmediate(() => child.emit('exit', 0))
+    return child
+  }
+  const schedule = createReminderTask({ exe: 'x.exe', run, wake: () => waking })
+  await schedule('2026-11-04T11:30:00.000Z')
+  waking = true
+  await schedule('2026-11-04T11:30:00.000Z')
+  await schedule('2026-11-04T11:30:00.000Z')
+  assert.deepEqual(wakes, ['0', '1'])
+})

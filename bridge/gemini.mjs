@@ -178,6 +178,9 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
         // the first abrir_ferramentas, so a turn only ever gains tools.
         let routed = options.routeTools ? routeTools(user.message) : null
         let hard = Boolean(options.deepModel) && isHardRequest(user.message)
+        // Why the slow, strong model ran, so a slow turn can be judged later without
+        // keeping what was asked: the words matched up front, or the model asked.
+        if (hard) usage.deepReason = 'palavras'
         let model = hard ? options.deepModel : routed && options.lightModel ? options.lightModel : options.model
         try {
           ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
@@ -289,6 +292,7 @@ export function geminiQuery({ prompt, options }, dependencies = {}) {
               if (call.name === THINK_HARDER) {
                 // For the rest of the turn: the deep model, thinking at length.
                 hard = true
+                usage.deepReason ??= 'modelo pediu'
                 yield { type: 'thinking' }
                 model = options.deepModel
                 responses.push({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { isError: false, content: [{ type: 'text', text: 'Raciocínio profundo ativado. Pense passo a passo, confira o resultado e só então responda.' }] } } })
