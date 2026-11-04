@@ -10,7 +10,8 @@ const { Notification } = require('electron')
  * The installer is not code-signed, so there is no publisher to check; what
  * protects the download is HTTPS to GitHub and the sha512 in latest.yml.
  */
-const SIX_HOURS = 6 * 60 * 60 * 1000
+/** A small request to GitHub; hourly means a new version reaches a JARVIS left open all day. */
+const CHECK_EVERY = 60 * 60 * 1000
 
 function startUpdater({ log, icon, onReady }) {
   const { autoUpdater } = require('electron-updater')
@@ -31,8 +32,20 @@ function startUpdater({ log, icon, onReady }) {
   autoUpdater.on('error', (error) => log(`Atualização indisponível: ${error.message}`))
   const check = () => autoUpdater.checkForUpdates().catch(() => {})
   setTimeout(check, 30_000)
-  const timer = setInterval(check, SIX_HOURS)
+  const timer = setInterval(check, CHECK_EVERY)
   return () => clearInterval(timer)
 }
 
-module.exports = { startUpdater }
+/**
+ * Whether an update is being installed right now. The installer runs silently
+ * for about a minute after JARVIS closes, and opening JARVIS in the middle of it
+ * starts an app whose files are being replaced.
+ */
+function updateInProgress() {
+  try {
+    const out = require('node:child_process').execFileSync('tasklist', ['/FI', 'IMAGENAME eq JARVIS-Setup*', '/NH', '/FO', 'CSV'], { encoding: 'utf8', windowsHide: true, timeout: 3000 })
+    return /JARVIS-Setup/i.test(out)
+  } catch { return false }
+}
+
+module.exports = { startUpdater, updateInProgress }

@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 1.12.0
+
+- **Respostas mais rápidas ao falar:** barulhos da sala (um clique, uma tosse, a TV) eram mandados duas vezes para transcrição, e cada vez desligava a transcrição rápida por um minuto. Agora o JARVIS reconhece que era só ruído e a próxima frase continua no caminho rápido.
+- **O que mudou:** depois de atualizar, uma notificação conta as novidades da versão. A lista inteira fica também em **O que mudou nesta versão**, no menu da bandeja.
+- **Acordar o computador para lembretes:** nova opção em **Aplicativo**, desligada por padrão. Com ela, o Windows tira o computador da suspensão para mostrar o lembrete.
+- **Atualizações chegam mais cedo:** o JARVIS procura versões novas a cada hora, e não mais a cada seis.
+- Abrir o JARVIS enquanto uma atualização é instalada mostra “O JARVIS está sendo atualizado” em vez de atrapalhar a instalação.
+- O registro de cada resposta diz quando o modelo mais forte foi usado e por quê, sem guardar o que foi perguntado.
+
 ## 1.11.3
 
 - Fechar a janela (o **X**) agora encerra o JARVIS por completo, inclusive o mini JARVIS, em vez de deixá-lo escondido na bandeja. Para mantê-lo por perto, minimize.

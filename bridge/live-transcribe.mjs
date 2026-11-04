@@ -36,6 +36,10 @@ export function serveLiveTranscription(socket, { connect = connectGemini, answer
   let session = null
   let endedAt = 0
   let talking = false
+  /** The session answered its setup, so it is alive and listening. */
+  let ready = false
+  /** The model's own voice detector heard someone start to speak. */
+  let heard = false
   let finished = false
   let waiting = null
 
@@ -45,15 +49,25 @@ export function serveLiveTranscription(socket, { connect = connectGemini, answer
     clearTimeout(waiting)
     clearTimeout(limit)
     try { session?.close() } catch { /* already gone */ }
-    if (answer.text !== undefined) console.log(`[jarvis] transcrição ao vivo: ${Date.now() - endedAt} ms após o fim da fala`)
+    if (answer.noise) console.log('[jarvis] transcrição ao vivo: só ruído, nada a transcrever')
+    else if (answer.text !== undefined) console.log(`[jarvis] transcrição ao vivo: ${Date.now() - endedAt} ms após o fim da fala`)
     if (answer.fallback) console.warn('[jarvis] transcrição ao vivo sem resposta; usando a transcrição comum')
     if (socket.readyState !== socket.OPEN) return
-    socket.send(JSON.stringify(answer))
+    socket.send(JSON.stringify(answer.noise ? { text: '' } : answer))
     socket.close()
   }
+  /**
+   * No words back is either a room with nobody talking or a session that went
+   * quiet on us, and only the second deserves the ordinary transcriber. Silence
+   * and noise get a setup answer and nothing else; speech always opens with the
+   * model's ACTIVITY_START. So a live session that never heard anyone start is
+   * noise, and sending it again cost a second request, and the app then stopped
+   * streaming for a minute, leaving the next real sentence on the slow path.
+   */
   const conclude = () => {
     const text = finals.join(' ').replace(/\s+/g, ' ').trim().slice(0, 12000)
-    finish(text ? { text: isNoise(text) ? '' : text } : { fallback: true })
+    if (text) finish({ text: isNoise(text) ? '' : text })
+    else finish(ready && !heard ? { noise: true } : { fallback: true })
   }
   const send = (frame) => session.sendRealtimeInput({ audio: { data: frame.toString('base64'), mimeType: 'audio/pcm;rate=16000' } })
   const end = () => {
@@ -80,8 +94,9 @@ export function serveLiveTranscription(socket, { connect = connectGemini, answer
 
   Promise.resolve().then(() => connect({
     onmessage: (message) => {
+      if (message.setupComplete) ready = true
       const activity = message.voiceActivity?.type
-      if (activity === 'ACTIVITY_START') talking = true
+      if (activity === 'ACTIVITY_START') talking = heard = true
       if (activity === 'ACTIVITY_END') talking = false
       const content = message.serverContent
       if (content?.inputTranscription?.text) finals.push(content.inputTranscription.text)

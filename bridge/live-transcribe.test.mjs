@@ -25,6 +25,7 @@ const fakeGemini = () => {
   gemini.final = (text) => gemini.callbacks.onmessage({ serverContent: { inputTranscription: { text } } })
   gemini.complete = () => gemini.callbacks.onmessage({ serverContent: { generationComplete: true } })
   gemini.activity = (type) => gemini.callbacks.onmessage({ voiceActivity: { type } })
+  gemini.ready = () => gemini.callbacks.onmessage({ setupComplete: {} })
   return gemini
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -143,5 +144,30 @@ test('a session that never ends is closed by its limit', async () => {
   const { socket, gemini } = await setup({ limitMs: 5 })
   await new Promise((resolve) => setTimeout(resolve, 20))
   assert.equal(gemini.closed, true)
+  assert.deepEqual(socket.answers, [{ fallback: true }])
+})
+
+test('a live session that never heard anyone start is noise, not a reason to send it again', async () => {
+  const { socket, gemini } = await setup({ answerMs: 5 })
+  gemini.ready()
+  socket.emit('message', frame, true)
+  socket.emit('message', 'end', false)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.deepEqual(socket.answers, [{ text: '' }])
+})
+
+test('speech heard with no words back still goes to the ordinary transcriber', async () => {
+  const { socket, gemini } = await setup({ answerMs: 5 })
+  gemini.ready()
+  gemini.activity('ACTIVITY_START')
+  socket.emit('message', 'end', false)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.deepEqual(socket.answers, [{ fallback: true }])
+})
+
+test('a session that never answered its setup is not trusted to call anything noise', async () => {
+  const { socket } = await setup({ answerMs: 5 })
+  socket.emit('message', 'end', false)
+  await new Promise((resolve) => setTimeout(resolve, 20))
   assert.deepEqual(socket.answers, [{ fallback: true }])
 })

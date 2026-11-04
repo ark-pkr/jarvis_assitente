@@ -9,7 +9,8 @@ const { spawn } = require('node:child_process')
  * instance just exits, so the task firing is harmless.
  *
  * StartWhenAvailable runs a task missed while the computer was off as soon as
- * it is back. The computer is never woken up.
+ * it is back. With "acordar o computador" on, WakeToRun also wakes it from
+ * sleep for the reminder; it never turns on a computer that is shut down.
  *
  * Both values reach PowerShell as environment variables, never inside the
  * script text, so neither the path nor the date can change what runs.
@@ -27,36 +28,39 @@ if (-not $env:JARVIS_REMINDER_AT) {
 $at = [DateTime]::Parse($env:JARVIS_REMINDER_AT, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind).ToLocalTime()
 $action = New-ScheduledTaskAction -Execute $env:JARVIS_REMINDER_EXE -Argument '${REMINDER_ARG}'
 $trigger = New-ScheduledTaskTrigger -Once -At $at
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -WakeToRun:($env:JARVIS_REMINDER_WAKE -eq '1')
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings -Description 'Abre o JARVIS na bandeja para mostrar o próximo lembrete.' -Force | Out-Null
 `
 
 /** Builds the PowerShell call; split out so it can be checked without running it. */
-function scheduleCommand(at, exe) {
+function scheduleCommand(at, exe, wake = false) {
   if (at !== null && !Number.isFinite(Date.parse(at))) throw new Error('Data do lembrete inválida.')
   return {
     file: 'powershell.exe',
     args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(SCRIPT, 'utf16le').toString('base64')],
-    env: { ...process.env, JARVIS_REMINDER_AT: at ?? '', JARVIS_REMINDER_EXE: exe },
+    env: { ...process.env, JARVIS_REMINDER_AT: at ?? '', JARVIS_REMINDER_EXE: exe, JARVIS_REMINDER_WAKE: wake ? '1' : '0' },
   }
 }
 
 /** Creates a scheduler that only calls PowerShell when the next time changes. */
-function createReminderTask({ exe, log = () => {}, run = spawn }) {
+function createReminderTask({ exe, log = () => {}, run = spawn, wake = () => false }) {
   let current
   let busy = Promise.resolve()
   return function schedule(at) {
     const next = at || null
-    if (next === current) return busy
-    current = next
-    const command = scheduleCommand(next, exe)
+    const waking = Boolean(next) && wake()
+    // Turning waking on or off has to reach Windows even when the time stays the same.
+    const key = next && `${next}${waking ? ' acordando' : ''}`
+    if (key === current) return busy
+    current = key
+    const command = scheduleCommand(next, exe, waking)
     busy = busy.then(() => new Promise((resolve) => {
       const child = run(command.file, command.args, { env: command.env, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
       let error = ''
       child.stderr?.on('data', (text) => { error += text })
       child.on('error', (err) => { log(`Agendador do Windows indisponível: ${err.message}`); current = undefined; resolve() })
       child.on('exit', (code) => {
-        if (code === 0) log(next ? `Próximo lembrete agendado no Windows para ${next}.` : 'Nenhum lembrete futuro; tarefa do Windows removida.')
+        if (code === 0) log(next ? `Próximo lembrete agendado no Windows para ${next}${waking ? ', acordando o computador' : ''}.` : 'Nenhum lembrete futuro; tarefa do Windows removida.')
         else { log(`Falha ao agendar o lembrete no Windows (${code}): ${error.trim().slice(0, 300)}`); current = undefined }
         resolve()
       })

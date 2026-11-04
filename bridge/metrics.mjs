@@ -20,7 +20,8 @@ export function turnCost({ inputTokens = 0, outputTokens = 0, thoughtTokens = 0 
 export async function recordTurn(usage, file = dataPath('metrics.jsonl')) {
   console.log(`[jarvis] turno: primeira resposta ${usage.firstTextMs ?? '-'} ms, total ${usage.totalMs} ms `
     + `(${usage.steps ?? '-'} passos, modelo ${usage.modelMs ?? '-'} ms, ferramentas ${usage.toolMs ?? '-'} ms, aprovação ${usage.approvalMs ?? '-'} ms), `
-    + `tokens ${usage.inputTokens} entrada, ${usage.cachedTokens} em cache, ${usage.outputTokens} saída, ${usage.thoughtTokens} raciocínio`)
+    + `tokens ${usage.inputTokens} entrada, ${usage.cachedTokens} em cache, ${usage.outputTokens} saída, ${usage.thoughtTokens} raciocínio`
+    + (usage.deep ? `, modelo forte (${usage.deepReason ?? 'sem motivo anotado'})` : ''))
   try {
     await fs.mkdir(path.dirname(file), { recursive: true })
     const size = await fs.stat(file).then((info) => info.size, () => 0)

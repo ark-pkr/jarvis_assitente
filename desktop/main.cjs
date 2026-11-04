@@ -7,7 +7,7 @@ const { randomBytes } = require('node:crypto')
 const { parseEnv } = require('node:util')
 const { getActiveWindow } = require('./active-window.cjs')
 const { createReminderTask, REMINDER_ARG } = require('./reminder-task.cjs')
-const { startUpdater } = require('./updater.cjs')
+const { startUpdater, updateInProgress } = require('./updater.cjs')
 
 app.setName('JARVIS')
 app.setPath('userData', path.join(app.getPath('appData'), 'JARVIS'))
@@ -123,7 +123,26 @@ async function createWindow() {
     if (error.code !== 'ERR_ABORTED' || !win.webContents.getURL().startsWith(origin + '/')) throw error
   }
 }
+/** This version's entry from CHANGELOG.md, written next to this file when the app is packaged. */
+async function showNews(fromNotice = false) {
+  const notes = (await fs.readFile(path.join(__dirname, 'novidades.txt'), 'utf8').catch(() => '')).trim()
+  const version = app.getVersion()
+  if (!notes) { if (!fromNotice) void dialog.showMessageBox({ type: 'info', title: 'JARVIS', message: `JARVIS ${version}`, detail: 'Não há notas para esta versão.' }); return }
+  if (fromNotice) {
+    const first = notes.split('\n').find((line) => line.startsWith('•'))?.replace(/^•\s*/, '') ?? notes
+    const notice = new Notification({ title: `JARVIS ${version}: o que mudou`, body: first.length > 180 ? `${first.slice(0, 177)}...` : first, icon: path.join(__dirname, 'icon.png') })
+    notice.on('click', () => void showNews())
+    notice.show()
+    return
+  }
+  void dialog.showMessageBox(win?.isVisible() ? win : undefined, { type: 'info', title: 'JARVIS', message: `O que mudou no JARVIS ${version}`, detail: notes, buttons: ['OK'] })
+}
 async function boot() {
+  if (app.isPackaged && updateInProgress()) {
+    logNow('Aberto durante a instalação de uma atualização; encerrando.')
+    await dialog.showMessageBox({ type: 'info', title: 'JARVIS', message: 'O JARVIS está sendo atualizado.', detail: 'A instalação termina em cerca de 1 minuto. Abra o JARVIS de novo depois disso.', buttons: ['OK'] })
+    return app.quit()
+  }
   await fs.mkdir(data, { recursive: true })
   try { config = JSON.parse(await fs.readFile(configFile, 'utf8')) } catch (error) { if (error.code !== 'ENOENT') throw error }
   if (!config.encryptedKey && process.env.JARVIS_IMPORT_ENV) {
@@ -193,7 +212,7 @@ async function boot() {
     delete config.encryptedVoiceProfile
     await persist()
   })
-  ipcMain.handle('jarvis:settings', (event) => { trusted(event); return { configured: Boolean(config.encryptedKey), model: config.model || 'gemini-3.5-flash', startOnLogin: loginSettings(), contextReminders: config.contextReminders === true,
+  ipcMain.handle('jarvis:settings', (event) => { trusted(event); return { configured: Boolean(config.encryptedKey), model: config.model || 'gemini-3.5-flash', startOnLogin: loginSettings(), contextReminders: config.contextReminders === true, wakeForReminders: config.wakeForReminders === true,
     autoActivate: config.autoActivate === true, clapToStart: config.clapToStart === true, miniOrb: config.miniOrb !== false, hotkey: config.hotkey || DEFAULT_HOTKEY, hotkeyError,
     localWake: config.localWake !== false, wakeConfigured: Boolean(config.encryptedWakeKey || config.encryptedVoiceAccessKey), calendarConnected: Boolean(config.encryptedCalendar) } })
   ipcMain.handle('jarvis:wake-key', (event) => { trusted(event); return config.localWake === false ? '' : wakeKey() })
@@ -244,6 +263,7 @@ async function boot() {
     }
     if (input.model !== undefined) { if (!/^gemini-[a-zA-Z0-9.-]{1,70}$/.test(input.model)) throw new Error('Modelo inválido.'); config.model = input.model }
     if (typeof input.startOnLogin === 'boolean' && app.isPackaged) app.setLoginItemSettings({ openAtLogin: input.startOnLogin, path: process.execPath, args: LOGIN_ARGS })
+    if (typeof input.wakeForReminders === 'boolean') config.wakeForReminders = input.wakeForReminders
     if (typeof input.contextReminders === 'boolean') config.contextReminders = input.contextReminders
     for (const name of ['autoActivate', 'clapToStart', 'miniOrb', 'localWake']) if (typeof input[name] === 'boolean') config[name] = input[name]
     if (input.wakeKey) {
@@ -286,13 +306,19 @@ async function boot() {
   await createMini()
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 24, height: 24 }))
   tray.setToolTip('JARVIS - assistente pessoal')
-  const trayMenu = (update) => Menu.buildFromTemplate([{ label: 'Abrir JARVIS', click: show }, ...(update ? [{ label: `Reiniciar e atualizar para ${update.version}`, click: update.install }] : []), { label: 'Sair do JARVIS', click: () => app.quit() }])
+  const trayMenu = (update) => Menu.buildFromTemplate([{ label: 'Abrir JARVIS', click: show }, { label: 'O que mudou nesta versão', click: () => void showNews() }, ...(update ? [{ label: `Reiniciar e atualizar para ${update.version}`, click: update.install }] : []), { label: 'Sair do JARVIS', click: () => app.quit() }])
   tray.setContextMenu(trayMenu())
+  // Once per new version: the first start after an update says what changed.
+  if (config.lastVersion !== app.getVersion()) {
+    const updated = Boolean(config.lastVersion)
+    config.lastVersion = app.getVersion(); await persist()
+    if (updated && app.isPackaged) void showNews(true)
+  }
   if (app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA) stopUpdater = startUpdater({ log: logNow, icon: path.join(__dirname, 'icon.png'), onReady: (version, install) => tray?.setContextMenu(trayMenu({ version, install })) })
   tray.on('double-click', show)
   const notified = new Set()
   // Only an installed copy may leave a task behind in the Windows scheduler.
-  const scheduleReminder = app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA ? createReminderTask({ exe: process.execPath, log }) : null
+  const scheduleReminder = app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA ? createReminderTask({ exe: process.execPath, log, wake: () => config.wakeForReminders === true }) : null
   notificationTimer = setInterval(async () => {
     try {
       const response = await fetch(origin + '/assistant/alerts', { headers: { cookie: `jarvis_session=${token}` }, signal: AbortSignal.timeout(3000) })
