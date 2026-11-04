@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { dataPath } from './paths.mjs'
+import { dataPath, unpacked } from './paths.mjs'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { projectFiles } from './projects.mjs'
@@ -12,7 +12,7 @@ const storage = dataPath('applications.json')
 export function launchViaWindows(executable, args) {
   return new Promise((resolve, reject) => {
     const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-    const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-STA', '-File', fileURLToPath(new URL('./desktop-launch.ps1', import.meta.url))], { shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-STA', '-File', unpacked(fileURLToPath(new URL('./desktop-launch.ps1', import.meta.url)))], { shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     let output = ''; const timer = setTimeout(() => { child.kill(); reject(new Error('O Windows não respondeu à abertura do aplicativo.')) }, 15000)
     child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { output += chunk })
     child.stderr.on('data', () => {}); child.stdin.on('error', () => {})

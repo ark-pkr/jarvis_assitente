@@ -49,25 +49,29 @@ export function serveLiveTranscription(socket, { connect = connectGemini, answer
     clearTimeout(waiting)
     clearTimeout(limit)
     try { session?.close() } catch { /* already gone */ }
-    if (answer.noise) console.log('[jarvis] transcrição ao vivo: só ruído, nada a transcrever')
-    else if (answer.text !== undefined) console.log(`[jarvis] transcrição ao vivo: ${Date.now() - endedAt} ms após o fim da fala`)
-    if (answer.fallback) console.warn('[jarvis] transcrição ao vivo sem resposta; usando a transcrição comum')
+    if (answer.text !== undefined) console.log(`[jarvis] transcrição ao vivo: ${Date.now() - endedAt} ms após o fim da fala`)
+    else if (answer.quiet) console.log('[jarvis] transcrição ao vivo: nenhuma fala detectada; conferindo pela transcrição comum')
+    else if (answer.fallback) console.warn('[jarvis] transcrição ao vivo sem resposta; usando a transcrição comum')
     if (socket.readyState !== socket.OPEN) return
-    socket.send(JSON.stringify(answer.noise ? { text: '' } : answer))
+    socket.send(JSON.stringify(answer))
     socket.close()
   }
   /**
-   * No words back is either a room with nobody talking or a session that went
-   * quiet on us, and only the second deserves the ordinary transcriber. Silence
-   * and noise get a setup answer and nothing else; speech always opens with the
-   * model's ACTIVITY_START. So a live session that never heard anyone start is
-   * noise, and sending it again cost a second request, and the app then stopped
-   * streaming for a minute, leaving the next real sentence on the slow path.
+   * No words back always goes to the ordinary transcriber: a sentence must
+   * never be lost. But the two ways to get there are told apart. A session that
+   * answered its setup and whose voice detector never heard anyone start is
+   * most likely a noise, so it is marked `quiet`, and the app keeps streaming
+   * the next sentence instead of falling back to the slow path for a minute.
+   *
+   * 1.12.0 went further and dropped a quiet segment as noise outright. In the
+   * real app that lost "Jarvis, abra o Word instalado": the whole segment
+   * reaches the model in one burst when the session opens, and its
+   * ACTIVITY_START can come after the wait here is over.
    */
   const conclude = () => {
     const text = finals.join(' ').replace(/\s+/g, ' ').trim().slice(0, 12000)
     if (text) finish({ text: isNoise(text) ? '' : text })
-    else finish(ready && !heard ? { noise: true } : { fallback: true })
+    else finish(ready && !heard ? { fallback: true, quiet: true } : { fallback: true })
   }
   const send = (frame) => session.sendRealtimeInput({ audio: { data: frame.toString('base64'), mimeType: 'audio/pcm;rate=16000' } })
   const end = () => {

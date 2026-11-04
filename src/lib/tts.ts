@@ -1,12 +1,15 @@
 import { setOutputAnalyser } from './voiceBands'
 import { createStretcher, type Stretcher } from './timeStretch'
 import {
-  env,
   USE_ELEVENLABS,
   BRIDGE_HTTP_URL,
 } from '../config'
 import { caps } from './capabilities'
 import { useWorkspace } from '../workspace'
+import { pickVoice } from './ttsVoices'
+import { fetchCloudAudio } from './ttsCloud'
+
+export { candidateVoices, cycleVoice } from './ttsVoices'
 
 /**
  * Speech output.
@@ -169,53 +172,6 @@ const MAX_UNSPOKEN = 220
 // Voice selection
 // ---------------------------------------------------------------------------
 
-const VOICE_PREF_KEY = 'jarvis.voice'
-
-/** Prefer Brazilian Portuguese voices and higher-quality installed variants. */
-function score(v: SpeechSynthesisVoice): number {
-  if (!/^pt/i.test(v.lang)) return 0
-  let s = /^pt[-_]br$/i.test(v.lang) ? 200 : 100
-  const n = v.name.toLowerCase()
-  if (n.includes('premium')) s += 30
-  else if (n.includes('enhanced')) s += 20
-  if (v.localService) s += 5
-  return s
-}
-
-const USABLE = 100
-
-/** Best-first list of usable voices — also what the voice picker cycles. */
-export function candidateVoices(): SpeechSynthesisVoice[] {
-  return speechSynthesis
-    .getVoices()
-    .filter((v) => /^pt/i.test(v.lang))
-    .map((v) => ({ v, s: score(v) }))
-    .filter((x) => x.s >= USABLE)
-    .sort((a, b) => b.s - a.s)
-    .map((x) => x.v)
-}
-
-let cachedVoice: SpeechSynthesisVoice | null | undefined
-
-function pickVoice(): SpeechSynthesisVoice | null {
-  if (cachedVoice !== undefined) return cachedVoice
-  const all = speechSynthesis.getVoices()
-  if (!all.length) return null // not loaded yet — try again next utterance
-
-  // Honour an explicit choice made with the voice picker. A saved name that no
-  // longer resolves is dropped rather than left to resurrect itself silently
-  // if that voice is ever reinstalled.
-  const saved = localStorage.getItem(VOICE_PREF_KEY)
-  if (saved) {
-    const hit = all.find((v) => v.name === saved)
-    if (hit && /^pt/i.test(hit.lang)) return (cachedVoice = hit)
-    localStorage.removeItem(VOICE_PREF_KEY)
-  }
-
-  cachedVoice = candidateVoices()[0] ?? null
-  return cachedVoice
-}
-
 /** What the HUD should show. Reports the engine actually in use rather than
  *  always naming a speechSynthesis voice that a cloud or neural engine has
  *  quietly replaced. */
@@ -223,28 +179,6 @@ export function currentVoiceName(): string {
   if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) return `Gemini · ${useWorkspace.getState().settings.neuralVoice}`
   if (USE_ELEVENLABS || caps().tts) return 'ElevenLabs'
   return pickVoice()?.name ?? 'default'
-}
-
-/** Step to the next candidate — lets you audition voices on your own machine
- *  rather than trusting a ranking to be right about how they sound. */
-export function cycleVoice(): string {
-  const list = candidateVoices()
-  if (!list.length) return 'default'
-  const now = pickVoice()
-  const i = list.findIndex((v) => v.name === now?.name)
-  const next = list[(i + 1) % list.length]
-  localStorage.setItem(VOICE_PREF_KEY, next.name)
-  cachedVoice = next
-  return next.name
-}
-
-// Voices load asynchronously in Chrome; the first call usually returns nothing.
-if (typeof speechSynthesis !== 'undefined') {
-  speechSynthesis.addEventListener('voiceschanged', () => {
-    cachedVoice = undefined
-    pickVoice()
-  })
-  pickVoice()
 }
 
 // ---------------------------------------------------------------------------
@@ -863,49 +797,4 @@ export function createSpeaker(): Speaker {
     },
     level: () => outLevel,
   }
-}
-
-/** Only used when USE_ELEVENLABS is on. Bridge proxy first (it already holds
- *  the key), then a direct key, then null to fall back to the native voice. */
-async function fetchCloudAudio(text: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${BRIDGE_HTTP_URL}/tts`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-    if (res.ok) return URL.createObjectURL(await res.blob())
-  } catch {
-    /* fall through */
-  }
-
-  if (env.elevenKey) {
-    try {
-      const res = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${env.elevenVoiceId}/stream` +
-          `?output_format=mp3_22050_32&optimize_streaming_latency=3`,
-        {
-          method: 'POST',
-          headers: {
-            'xi-api-key': env.elevenKey,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            text,
-            model_id: 'eleven_flash_v2_5',
-            voice_settings: {
-              stability: 0.4,
-              similarity_boost: 0.75,
-              speed: 1.05,
-            },
-          }),
-        },
-      )
-      if (res.ok) return URL.createObjectURL(await res.blob())
-    } catch {
-      /* fall through */
-    }
-  }
-
-  return null
 }
