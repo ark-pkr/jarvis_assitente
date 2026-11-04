@@ -62,6 +62,6 @@ export function DesktopSettings() {
     <p role="status">{message}</p>
     <p>Com a proteção de voz ativa, a identificação do perfil é feita localmente antes de enviar o trecho aprovado ao Gemini. O áudio bruto do cadastro não é armazenado.</p>
     <p>A transcrição e as respostas precisam de internet e consomem a cota da API Gemini.</p>
-    <p>Fechar a janela mantém o assistente na bandeja. Para encerrar o microfone e os serviços, use “Sair do JARVIS” no menu do ícone.</p>
+    <p>Fechar a janela encerra o JARVIS por completo: microfone, mini JARVIS e serviços. Para deixá-lo por perto sem a janela na frente, minimize.</p>
   </>
 }

@@ -25,7 +25,7 @@ function startUpdater({ log, icon, onReady }) {
   autoUpdater.on('update-downloaded', (info) => {
     log(`Versão ${info.version} pronta para instalar.`)
     onReady(info.version, () => autoUpdater.quitAndInstall(true, true))
-    new Notification({ title: 'JARVIS atualizado', body: `A versão ${info.version} foi baixada e será instalada quando você sair do JARVIS.`, icon }).show()
+    new Notification({ title: 'JARVIS atualizado', body: `A versão ${info.version} foi baixada. Ao fechar o JARVIS ela é instalada em cerca de 1 minuto: espere antes de abrir de novo. Ou use "Reiniciar e atualizar" na bandeja, que já reabre sozinho.`, icon }).show()
   })
   // Offline, rate-limited or no release yet: none of it should bother the user.
   autoUpdater.on('error', (error) => log(`Atualização indisponível: ${error.message}`))
