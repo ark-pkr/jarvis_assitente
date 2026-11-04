@@ -57,7 +57,7 @@ async function startBridge() {
   worker.stdout?.on('data', (text) => log(text.toString()))
   worker.stderr?.on('data', (text) => log(text.toString()))
   const currentWorker = worker
-  worker.on('exit', (code) => { if (worker === currentWorker && !quitting && !restarting) { log(`Serviço encerrado: ${code}`); void dialog.showMessageBox({ type: 'error', title: 'JARVIS', message: 'O serviço local parou. Feche o JARVIS pelo menu da bandeja e abra novamente.', detail: `Código: ${code}. Logs: ${directory}` }) } })
+  worker.on('exit', (code) => { if (worker === currentWorker && !quitting && !restarting) { log(`Serviço encerrado: ${code}`); void dialog.showMessageBox({ type: 'error', title: 'JARVIS', message: 'O serviço local parou. Feche o JARVIS e abra novamente.', detail: `Código: ${code}. Logs: ${directory}` }) } })
   for (let attempt = 0; attempt < 100; attempt++) {
     try { const response = await fetch(origin + '/health', { headers: { cookie: `jarvis_session=${token}` }, signal: AbortSignal.timeout(1000) }); if (response.ok) return }
     catch { /* Wait for the local service. */ }
@@ -108,7 +108,9 @@ async function createWindow() {
   win.setMenuBarVisibility(false)
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== origin) event.preventDefault() })
-  win.on('close', (event) => { if (!quitting) { event.preventDefault(); win.hide() } })
+  // The X means quit: window, mini JARVIS, microphone and the local service all go,
+  // exactly like "Sair do JARVIS" in the tray (and a downloaded update installs).
+  win.on('close', (event) => { if (!quitting) { event.preventDefault(); app.quit() } })
   for (const change of ['hide', 'show', 'minimize', 'restore', 'focus', 'blur']) win.on(change, syncMini)
   // Logging in shouldn't throw a window at anyone who asked him to wake up alone.
   // Nor at anyone a scheduled reminder started him for: that one only wants the notification.

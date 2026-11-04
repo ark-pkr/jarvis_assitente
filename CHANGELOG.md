@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 1.11.3
+
+- Fechar a janela (o **X**) agora encerra o JARVIS por completo, inclusive o mini JARVIS, em vez de deixá-lo escondido na bandeja. Para mantê-lo por perto, minimize.
+- O aviso de atualização explica que a instalação leva cerca de 1 minuto depois de fechar, e que **Reiniciar e atualizar** já reabre sozinho. Abrir o JARVIS antes disso atrapalhava a instalação.
+
 ## 1.11.2
 
 - As notificações voltam a aparecer como **JARVIS**, e não como “Electron”.

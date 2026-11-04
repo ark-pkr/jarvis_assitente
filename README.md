@@ -11,11 +11,11 @@ O histórico de cada versão está em [CHANGELOG.md](CHANGELOG.md).
 3. Abra o JARVIS e informe a chave em **Histórico e ajustes → Aplicativo**. Ela é criptografada pelo Windows para a sua conta e nunca volta para a interface.
 4. Clique em **Iniciar JARVIS**, permita o microfone e fale.
 
-Fechar a janela mantém o JARVIS na bandeja. Use **Sair do JARVIS** para encerrá-lo. A inicialização com o Windows pode ser ligada ou desligada em **Aplicativo**.
+Fechar a janela (o **X**) encerra o JARVIS por completo, inclusive o mini JARVIS, igual a **Sair do JARVIS** na bandeja. Para deixá-lo por perto sem a janela na frente, minimize. A inicialização com o Windows pode ser ligada ou desligada em **Aplicativo**.
 
 O instalador ainda não tem assinatura digital, então o Windows pode mostrar um aviso de aplicativo desconhecido.
 
-**Atualização automática.** O JARVIS procura versões novas no GitHub ao abrir e a cada seis horas. A nova versão é baixada em segundo plano e instalada quando você sai do JARVIS, então ele nunca reinicia no meio de uma conversa. Para instalar na hora, use **Reiniciar e atualizar** no menu da bandeja.
+**Atualização automática.** O JARVIS procura versões novas no GitHub ao abrir e a cada seis horas. A nova versão é baixada em segundo plano e instalada quando você fecha o JARVIS, então ele nunca reinicia no meio de uma conversa. A instalação leva cerca de 1 minuto, sem nada na tela: espere antes de abrir de novo. Para instalar na hora, use **Reiniciar e atualizar** no menu da bandeja.
 
 Requisitos opcionais: Chrome para navegar e pesquisar, Word e VS Code para as integrações, Docker Desktop para executar comandos de projetos.
 
