@@ -10,9 +10,12 @@ import { createFramer } from './localWake'
  */
 
 export type LiveAnswer = { text: string }
+/** No words back. `quiet`: the live model heard nobody start talking, so the
+ *  live path is fine and only this segment goes the ordinary way. */
+export type LiveMiss = { quiet: boolean }
 export type LiveStt = {
   feed: (samples: Float32Array, rate: number) => void
-  finish: () => Promise<LiveAnswer | null>
+  finish: () => Promise<LiveAnswer | LiveMiss>
   abort: () => void
 }
 
@@ -25,8 +28,8 @@ const ANSWER_MS = 3000
 export function openLiveStt(): LiveStt {
   const socket = new WebSocket(new URL('/stt/live', BRIDGE_WS_URL))
   const waiting: (ArrayBuffer | string)[] = []
-  let settle: (answer: LiveAnswer | null) => void = () => {}
-  const answered = new Promise<LiveAnswer | null>((resolve) => { settle = resolve })
+  let settle: (answer: LiveAnswer | LiveMiss) => void = () => {}
+  const answered = new Promise<LiveAnswer | LiveMiss>((resolve) => { settle = resolve })
 
   const send = (message: ArrayBuffer | string) => {
     if (socket.readyState === WebSocket.OPEN) socket.send(message)
@@ -35,23 +38,23 @@ export function openLiveStt(): LiveStt {
   socket.onopen = () => { for (const message of waiting.splice(0)) socket.send(message) }
   socket.onmessage = ({ data }) => {
     try {
-      const { text } = JSON.parse(String(data)) as { text?: unknown }
-      settle(typeof text === 'string' ? { text } : null)
-    } catch { settle(null) }
+      const { text, quiet } = JSON.parse(String(data)) as { text?: unknown; quiet?: unknown }
+      settle(typeof text === 'string' ? { text } : { quiet: quiet === true })
+    } catch { settle({ quiet: false }) }
   }
-  socket.onerror = () => settle(null)
-  socket.onclose = () => settle(null)
+  socket.onerror = () => settle({ quiet: false })
+  socket.onclose = () => settle({ quiet: false })
 
   const feed = createFramer(FRAME, RATE, (frame) => send(frame.buffer as ArrayBuffer))
   return {
     feed,
     finish: () => {
       send('end')
-      const timer = setTimeout(() => settle(null), ANSWER_MS)
+      const timer = setTimeout(() => settle({ quiet: false }), ANSWER_MS)
       return answered.finally(() => clearTimeout(timer))
     },
     abort: () => {
-      settle(null)
+      settle({ quiet: false })
       socket.close()
     },
   }

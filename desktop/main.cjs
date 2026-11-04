@@ -21,6 +21,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 if (process.env.JARVIS_DESKTOP_TEST_DATA) app.setPath('userData', process.env.JARVIS_DESKTOP_TEST_DATA)
 if (process.env.JARVIS_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.JARVIS_DEBUG_PORT)
 const root = path.resolve(__dirname, '..')
+/** Windows reads a notification's icon itself, so it gets the copy kept outside app.asar (asarUnpack). */
+const NOTICE_ICON = path.join(__dirname, 'icon.png').replace(/([\\/])app\.asar([\\/])/, '$1app.asar.unpacked$2')
 const directory = app.getPath('userData')
 const data = path.join(directory, 'dados')
 const configFile = path.join(directory, 'desktop-settings.json')
@@ -130,7 +132,7 @@ async function showNews(fromNotice = false) {
   if (!notes) { if (!fromNotice) void dialog.showMessageBox({ type: 'info', title: 'JARVIS', message: `JARVIS ${version}`, detail: 'Não há notas para esta versão.' }); return }
   if (fromNotice) {
     const first = notes.split('\n').find((line) => line.startsWith('•'))?.replace(/^•\s*/, '') ?? notes
-    const notice = new Notification({ title: `JARVIS ${version}: o que mudou`, body: first.length > 180 ? `${first.slice(0, 177)}...` : first, icon: path.join(__dirname, 'icon.png') })
+    const notice = new Notification({ title: `JARVIS ${version}: o que mudou`, body: first.length > 180 ? `${first.slice(0, 177)}...` : first, icon: NOTICE_ICON })
     notice.on('click', () => void showNews())
     notice.show()
     return
@@ -314,7 +316,7 @@ async function boot() {
     config.lastVersion = app.getVersion(); await persist()
     if (updated && app.isPackaged) void showNews(true)
   }
-  if (app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA) stopUpdater = startUpdater({ log: logNow, icon: path.join(__dirname, 'icon.png'), onReady: (version, install) => tray?.setContextMenu(trayMenu({ version, install })) })
+  if (app.isPackaged && !process.env.JARVIS_DESKTOP_TEST_DATA) stopUpdater = startUpdater({ log: logNow, icon: NOTICE_ICON, onReady: (version, install) => tray?.setContextMenu(trayMenu({ version, install })) })
   tray.on('double-click', show)
   const notified = new Set()
   // Only an installed copy may leave a task behind in the Windows scheduler.
@@ -325,7 +327,7 @@ async function boot() {
       const state = await response.json()
       for (const item of state.notifications) if (!notified.has(item.id)) {
         notified.add(item.id)
-        const notice = new Notification({ title: 'Lembrete do JARVIS', body: item.title, icon: path.join(__dirname, 'icon.png') })
+        const notice = new Notification({ title: 'Lembrete do JARVIS', body: item.title, icon: NOTICE_ICON })
         notice.on('click', show)
         notice.show()
       }

@@ -5,8 +5,9 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { projectFiles } from './projects.mjs'
+import { unpacked } from './paths.mjs'
 
-const script = fileURLToPath(new URL('./word.ps1', import.meta.url))
+const script = unpacked(fileURLToPath(new URL('./word.ps1', import.meta.url)))
 export function callWord(payload, signal) {
   if (process.platform !== 'win32') throw new Error('Integração do Word disponível apenas no Windows.')
   return new Promise((resolve, reject) => {

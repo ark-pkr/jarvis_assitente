@@ -147,13 +147,13 @@ test('a session that never ends is closed by its limit', async () => {
   assert.deepEqual(socket.answers, [{ fallback: true }])
 })
 
-test('a live session that never heard anyone start is noise, not a reason to send it again', async () => {
+test('a live session that never heard anyone start still checks the ordinary way, marked quiet', async () => {
   const { socket, gemini } = await setup({ answerMs: 5 })
   gemini.ready()
   socket.emit('message', frame, true)
   socket.emit('message', 'end', false)
   await new Promise((resolve) => setTimeout(resolve, 20))
-  assert.deepEqual(socket.answers, [{ text: '' }])
+  assert.deepEqual(socket.answers, [{ fallback: true, quiet: true }], 'a sentence whose ACTIVITY_START is late must never be dropped')
 })
 
 test('speech heard with no words back still goes to the ordinary transcriber', async () => {

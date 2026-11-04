@@ -26,3 +26,11 @@ test('a real failure is not retried', async () => {
   await assert.rejects(replaceFile('a', 'b', { move, delayMs: 1 }), /ENOSPC/)
   assert.equal(calls(), 1)
 })
+
+test('a script inside the app archive is handed out from where it sits unpacked', async () => {
+  const { unpacked } = await import('./paths.mjs')
+  assert.equal(unpacked(String.raw`C:\Users\x\AppData\Local\Programs\JARVIS\resources\app.asar\bridge\word.ps1`), String.raw`C:\Users\x\AppData\Local\Programs\JARVIS\resources\app.asar.unpacked\bridge\word.ps1`)
+  assert.equal(unpacked('/opt/JARVIS/resources/app.asar/bridge/media.ps1'), '/opt/JARVIS/resources/app.asar.unpacked/bridge/media.ps1')
+  assert.equal(unpacked(String.raw`C:\dev\jarvis\bridge\word.ps1`), String.raw`C:\dev\jarvis\bridge\word.ps1`, 'outside the package nothing changes')
+  assert.equal(unpacked(String.raw`C:\x\app.asar.unpacked\bridge\word.ps1`), String.raw`C:\x\app.asar.unpacked\bridge\word.ps1`, 'already unpacked stays so')
+})

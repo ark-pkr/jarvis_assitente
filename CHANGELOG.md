@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 1.13.0
+
+- **Corrigido:** na 1.12.0, uma frase podia ser descartada como “só ruído” quando a transcrição rápida demorava a perceber que alguém falava. Agora, sem texto da transcrição rápida, a frase sempre é conferida pela transcrição comum. Quando era mesmo só barulho, a transcrição rápida continua ligada para a próxima frase.
+- **Atualizações muito mais rápidas:** o aplicativo agora fica empacotado em um arquivo só, em vez de cerca de 3.400 arquivos soltos, o que deixa a instalação de cada atualização bem mais curta.
+- A publicação confere o pacote antes de enviar: sem chave da API, sem dados pessoais e com os scripts do Word, do volume e dos aplicativos fora do pacote, onde o Windows os encontra.
+- Os testes que usam o Chrome não falham mais à toa quando a máquina está lenta.
+- Código da voz reorganizado em partes menores, sem mudança de comportamento.
+
 ## 1.12.0
 
 - **Respostas mais rápidas ao falar:** barulhos da sala (um clique, uma tosse, a TV) eram mandados duas vezes para transcrição, e cada vez desligava a transcrição rápida por um minuto. Agora o JARVIS reconhece que era só ruído e a próxima frase continua no caminho rápido.
