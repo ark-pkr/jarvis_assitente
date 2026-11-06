@@ -30,7 +30,7 @@ export const CASES = [
   { id: 'logica', area: 'raciocínio', steps: say('tenho 5 maçãs, como 2 e compro o dobro do que sobrou. com quantas fico?'), says: /\b9\b|nove/i },
   // Hard without the words `isHardRequest` knows: only pensar_melhor gets these to the deep model.
   { id: 'idade', area: 'raciocínio', steps: say('minha mãe tem o triplo da minha idade e daqui a 12 anos vai ter o dobro. que idade eu tenho?'), says: /\b12\b|doze/i },
-  { id: 'horario', area: 'raciocínio', steps: say('o ônibus sai às 14h40 e a viagem leva 3 horas e 35 minutos. chego que horas?'), says: /18\s?[:h]\s?15|dezoito e quinze|seis e quinze/i },
+  { id: 'horario', area: 'raciocínio', steps: say('o ônibus sai às 14h40 e a viagem leva 3 horas e 35 minutos. chego que horas?'), says: /\b(18|dezoito|seis)\s*(:|h|horas)?\s*(e\s+)?(15|quinze)\b/i },
   { id: 'juros', area: 'raciocínio', steps: say('quanto rende 1000 reais a 10 por cento ao ano, juros compostos, em 2 anos? diga só o total'), says: /1\.?210|mil,? (e )?duzentos e dez/i },
 
   // The present: it has to go and look.

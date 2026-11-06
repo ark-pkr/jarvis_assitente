@@ -122,6 +122,8 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
             <option value="formal">Formal · sóbrio, sem piadas</option><option value="equilibrado">Equilibrado · direto e cordial</option><option value="bem-humorado">Bem-humorado · leve</option><option value="sarcastico">Sarcástico · mordomo inglês</option>
           </select></label>
         <p>Vale a partir da próxima resposta. Você também pode pedir por voz. O humor nunca aparece em erros, confirmações ou más notícias.</p>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.followUp} onChange={(event) => workspace.setSettings({ followUp: event.target.checked })} />Depois de responder, ouvir o próximo pedido sem precisar dizer “Jarvis”</label>
+        <p>Desligado, ele só atende quando ouve o nome: conversas no ambiente, como um atendimento no balcão, não viram pedidos. Ligado, por 15 segundos depois de cada resposta, qualquer fala é tratada como pedido.</p>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.bargeIn} onChange={(event) => workspace.setSettings({ bargeIn: event.target.checked })} />Interromper só falando, sem dizer o nome</label>
         <p>Use com fone. Em caixa de som, a própria voz dele pode se interromper. Nada sai do computador até ele parar de falar e passar a ouvir você.</p>
         <h3>Voz e desempenho</h3>

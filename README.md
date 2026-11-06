@@ -34,7 +34,7 @@ Requisitos opcionais: Chrome para navegar e pesquisar, Word e VS Code para as in
 
 Ao iniciar, ele cumprimenta; uma vez por dia, o cumprimento traz lembretes, tarefas, o próximo passo e o clima, se houver cidade na **Central**. A abertura completa só toca na primeira vez, e **Áudio** tem a opção de repeti-la sempre.
 
-Após uma resposta, há 15 segundos para continuar sem repetir o nome. Diga **“resposta rápida”** ou **“investigue melhor”** para escolher o ritmo daquele pedido.
+Ele só atende quando ouve **“Jarvis”**, então conversas no ambiente não viram pedidos. Para ter 15 segundos depois de cada resposta sem repetir o nome, ligue a opção em **Histórico e ajustes → Áudio**. Diga **“resposta rápida”** ou **“investigue melhor”** para escolher o ritmo daquele pedido.
 
 ## O que o JARVIS faz
 
