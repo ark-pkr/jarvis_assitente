@@ -14,7 +14,7 @@
  * here touches this computer's records or apps. Each run costs model calls.
  */
 import { spawn } from 'node:child_process'
-import { promises as fs } from 'node:fs'
+import { promises as fs, createWriteStream } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { WebSocket } from 'ws'
@@ -31,7 +31,11 @@ const TURN_MS = 60000
 function startBridge(data) {
   const env = { ...process.env, JARVIS_BRIDGE_PORT: String(PORT), JARVIS_DATA_DIR: data, JARVIS_ALLOWED_ORIGINS: ORIGIN, ELEVENLABS_API_KEY: '', JARVIS_NO_CHROME: '1' }
   const child = spawn(process.execPath, ['bridge/server.mjs'], { env, stdio: ['ignore', 'pipe', 'pipe'] })
-  child.stderr.on('data', () => {}); child.stdout.on('data', () => {})
+  // JARVIS_EVAL_LOG=arquivo keeps the bridge's own log, to see where a slow answer went.
+  if (process.env.JARVIS_EVAL_LOG) {
+    const log = createWriteStream(process.env.JARVIS_EVAL_LOG)
+    child.stdout.pipe(log); child.stderr.pipe(log)
+  } else { child.stderr.on('data', () => {}); child.stdout.on('data', () => {}) }
   return child
 }
 
@@ -98,12 +102,18 @@ try {
     let passes = 0
     let shown = null
     const began = Date.now()
+    // The whole case includes the deliberate waits (settle) that give memory
+    // time to be saved, so it says little about speed. The last answer alone is
+    // what the person waits for.
+    let answering = 0
     for (let run = 0; run < times; run++) {
       let context = []
       let last = { text: '', tools: [] }
       for (const step of item.steps) {
         if (step.newChat) { context = []; await client.close(); client = await connect() }
+        const asked = Date.now()
         last = await client.ask(step.text, context)
+        if (step === item.steps.at(-1)) answering += Date.now() - asked
         context = [...context, { role: 'user', text: step.text }, { role: 'jarvis', text: last.text }]
         if (step.endChat) { await client.close(); client = await connect() }
         if (step.settle) await new Promise((resolve) => setTimeout(resolve, step.settle))
@@ -119,9 +129,10 @@ try {
     }
     const { faults, last } = shown
     const ms = Math.round((Date.now() - began) / times)
-    report.push({ id: item.id, area: item.area, passed: passes === times, runs: times, passes, faults, ms, tools: last.tools, text: last.text.slice(0, 400) })
+    const answerMs = Math.round(answering / times)
+    report.push({ id: item.id, area: item.area, passed: passes === times, runs: times, passes, faults, ms, answerMs, tools: last.tools, text: last.text.slice(0, 400) })
     const rate = times > 1 ? ` ${passes}/${times}` : ''
-    console.log(`${passes === times ? 'ok    ' : 'FALHOU'} ${item.area.padEnd(13)} ${item.id.padEnd(20)}${rate} ${(ms / 1000).toFixed(1).padStart(5)} s ${faults.join('; ').slice(0, 110)}`)
+    console.log(`${passes === times ? 'ok    ' : 'FALHOU'} ${item.area.padEnd(13)} ${item.id.padEnd(20)}${rate} resposta ${(answerMs / 1000).toFixed(1).padStart(5)} s ${faults.join('; ').slice(0, 110)}`)
     if (faults.length) console.log(`       disse: ${last.text.replace(/\s+/g, ' ').slice(0, 200) || '(nada)'}`)
   }
   await client.close()

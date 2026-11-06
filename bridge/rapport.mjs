@@ -23,6 +23,8 @@ const QUIET_FOR_MS = 10 * MINUTE
 const AROUND_WITHIN_MS = 4 * HOUR
 const STALE_DAYS = 3
 const SAME_NUDGE_DAYS = 7
+/** Reviews come due every day; reminding every day about them would nag. */
+const REVIEW_NUDGE_DAYS = 2
 const SEEN_EVERY_MS = 5 * MINUTE
 
 const NUMBERS = ['um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez']
@@ -73,12 +75,17 @@ export class Rapport {
 export const rapport = new Rapport()
 
 /** What, if anything, is worth saying unprompted right now. Marks nothing. */
-export function pickNudge({ followups, entries, state, now }) {
+export function pickNudge({ followups, entries, state, now, reviews = 0 }) {
   const hour = hourOf(now)
   if (hour < AWAKE_FROM || hour >= AWAKE_UNTIL || state.lastNudgeDay === dayOf(now)) return null
   if (!state.lastSeen || now - state.lastSeen < QUIET_FOR_MS || now - state.lastSeen > AROUND_WITHIN_MS) return null
   const [followup] = followups
   if (followup) return { key: `followup:${followup.id}`, followup, say: followup.ask }
+  // Questions he got wrong in a quiz, spaced out to be asked again. Forgotten,
+  // they pile up, and ten minutes now is worth more than an hour before the exam.
+  if (reviews > 0 && now - (state.nudged.reviews ?? 0) >= REVIEW_NUDGE_DAYS * DAY) {
+    return { key: 'reviews', say: reviews === 1 ? 'Tem uma pergunta de revisão do seu estudo esperando. Quer responder agora? É rapidinho.' : `Tem ${NUMBERS[reviews - 1] ?? reviews} perguntas de revisão do seu estudo esperando. Quer fazer dez minutinhos agora?` }
+  }
   const stale = entries
     .filter((entry) => ['projeto', 'estudo'].includes(entry.kind) && entry.status !== 'concluído' && entry.next?.trim() && now - (entry.updated ?? now) >= STALE_DAYS * DAY)
     .filter((entry) => now - (state.nudged[entry.id] ?? 0) >= SAME_NUDGE_DAYS * DAY)
@@ -88,9 +95,10 @@ export function pickNudge({ followups, entries, state, now }) {
   return { key: stale.id, say: `Faz ${NUMBERS[days - 1] ?? days} dias que você não mexe em ${stale.title}. Quer retomar?` }
 }
 
-export async function handleNudge(req, res, cors, { memory, notes, friend = rapport, clock = Date.now }) {
+export async function handleNudge(req, res, cors, { memory, notes, friend = rapport, clock = Date.now, exams }) {
   const now = clock()
-  const nudge = pickNudge({ followups: notes.followupsDue(await notes.read(), now), entries: (await memory.read()).entries, state: await friend.read(), now })
+  const reviews = exams ? await exams.reviewsDue(now).catch(() => 0) : 0
+  const nudge = pickNudge({ followups: notes.followupsDue(await notes.read(), now), entries: (await memory.read()).entries, state: await friend.read(), now, reviews })
   if (nudge) {
     await friend.mutate((state) => { state.lastNudgeDay = dayOf(now); state.nudged[nudge.key] = now })
     if (nudge.followup) await notes.followupAsked(nudge.followup.id)

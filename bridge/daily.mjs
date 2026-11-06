@@ -30,22 +30,48 @@ async function json(url, fetcher, signal) {
 }
 
 /**
+ * What was already looked up. Each lookup is a round trip of 0.2 to 1 s, and
+ * about 2 s when the connection is cold, which the person waits through on top
+ * of the model. A city does not move, so where it is is kept for as long as the
+ * bridge runs; a forecast is kept for ten minutes, so the follow-up question
+ * ("e amanhã?") costs nothing. Kept per fetcher, so tests never share it.
+ */
+const FORECAST_FRESH_MS = 10 * 60 * 1000
+const remembered = new WeakMap()
+function rememberedFor(fetcher) {
+  if (!remembered.has(fetcher)) remembered.set(fetcher, { places: new Map(), forecasts: new Map() })
+  return remembered.get(fetcher)
+}
+
+/**
  * Open-Meteo needs no key, so the weather works from a fresh install.
  *
  * "Balsas, Maranhão" is split because the geocoder searches names rather than
  * phrases, and a Brazilian match wins because that is who is asking: "Palmas"
  * should not land in Spain.
  */
-export async function fetchWeather(city, { fetcher = fetch, signal, days = 1 } = {}) {
+export async function fetchWeather(city, { fetcher = fetch, signal, days = 1, now = Date.now } = {}) {
   const [name, ...region] = String(city).split(',').map((part) => part.trim()).filter(Boolean)
   if (!name) throw new Error('Informe a cidade.')
-  const found = await json(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=10&language=pt&format=json`, fetcher, signal)
-  const places = found.results ?? []
-  const wanted = region.join(' ').toLocaleLowerCase('pt-BR')
-  const place = (wanted && places.find((item) => `${item.admin1 ?? ''} ${item.country ?? ''}`.toLocaleLowerCase('pt-BR').includes(wanted)))
-    || places.find((item) => item.country_code === 'BR') || places[0]
-  if (!place) throw new Error(`Não encontrei a cidade ${name}.`)
-  const forecast = await json(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=${days}`, fetcher, signal)
+  const memory = rememberedFor(fetcher)
+  const key = String(city).trim().toLocaleLowerCase('pt-BR')
+  let place = memory.places.get(key)
+  if (!place) {
+    const found = await json(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=10&language=pt&format=json`, fetcher, signal)
+    const places = found.results ?? []
+    const wanted = region.join(' ').toLocaleLowerCase('pt-BR')
+    place = (wanted && places.find((item) => `${item.admin1 ?? ''} ${item.country ?? ''}`.toLocaleLowerCase('pt-BR').includes(wanted)))
+      || places.find((item) => item.country_code === 'BR') || places[0]
+    if (!place) throw new Error(`Não encontrei a cidade ${name}.`)
+    memory.places.set(key, place)
+  }
+  const spot = `${place.latitude},${place.longitude},${days}`
+  const kept = memory.forecasts.get(spot)
+  let forecast = kept && now() - kept.at < FORECAST_FRESH_MS ? kept.forecast : null
+  if (!forecast) {
+    forecast = await json(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=${days}`, fetcher, signal)
+    memory.forecasts.set(spot, { at: now(), forecast })
+  }
   const { current, daily } = forecast
   return {
     city: [place.name, place.admin1, place.country].filter(Boolean).join(', '),

@@ -12,7 +12,7 @@ import { Boot } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
 import { BOOT_MS, useStore, type Timer } from './store'
-import { startVoice, type Voice, type VoiceMode } from './lib/voice'
+import { lastRoomSpeech, startVoice, type Voice, type VoiceMode } from './lib/voice'
 import { createSpeaker, cycleVoice, currentVoiceName, speakingAloud } from './lib/tts'
 import { watchApproval, type Approval } from './lib/bridge'
 import { approvalQuestion, ASK_AGAIN, readAnswer } from './lib/approvalVoice'
@@ -70,6 +70,8 @@ const newId = () =>
 /** Called during a class, he listens for this long and goes back to writing it down. */
 const LECTURE_EAR_MS = 12000
 const NUDGE_CHECK_MS = 5 * 60000
+/** Someone talked this recently, so whatever he would bring up can wait. */
+const ROOM_QUIET_MS = 3 * 60000
 
 export default function App() {
   const store = useStore
@@ -182,7 +184,7 @@ export default function App() {
     speaker.current = null
     music.duck(false)
     listen(AWAIT_SPEECH_MS)
-    voice.current?.arm?.(15000)
+    keepEar()
   }
 
   // -- one turn -------------------------------------------------------------
@@ -298,7 +300,7 @@ export default function App() {
         // Stay open. Having to say his name again to add one more sentence is
         // the difference between a conversation and a vending machine.
         listen(FOLLOW_UP_MS)
-        voice.current?.arm?.(15000)
+        keepEar()
       }
     }
   }
@@ -345,7 +347,7 @@ export default function App() {
     if (mine !== turn.current) return
     speaker.current = null
     listen(AWAIT_SPEECH_MS)
-    voice.current?.arm?.(15000)
+    keepEar()
   }
 
   // -- voice events ---------------------------------------------------------
@@ -368,6 +370,19 @@ export default function App() {
         // for in the middle of a turn, and only once he has finished asking.
         return answering.current ? 'command' : 'guard'
     }
+  }
+
+  /**
+   * After he answers, whether the next sentence may come without his name.
+   *
+   * It used to, for fifteen seconds after every answer, so a second request did
+   * not need "Jarvis" again. At a shop counter that window caught the customer:
+   * he answered them, which opened the window again. So it is a choice now, off
+   * unless asked for, and he answers only to his name. A question he asks
+   * himself (a confirmation, "repita esse trecho") still waits for the reply.
+   */
+  const keepEar = () => {
+    if (useWorkspace.getState().settings.followUp) voice.current?.arm?.(15000)
   }
 
   /** Only while he is talking or working, and never over an answer he is waiting for. */
@@ -520,6 +535,9 @@ export default function App() {
   const nudge = async (phase: string, focusing: boolean) => {
     const { initiative, privacyMode } = useWorkspace.getState().settings
     if (phase !== 'listening' || !initiative || privacyMode || focusing || store.getState().quizOn || Date.now() - nudgedAt.current < NUDGE_CHECK_MS) return ''
+    // Not over somebody else's conversation. Checked before the bridge is
+    // asked, so the day's one remark is not used up on a busy room.
+    if (Date.now() - lastRoomSpeech() < ROOM_QUIET_MS) return ''
     nudgedAt.current = Date.now()
     const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/nudge`, { signal: AbortSignal.timeout(3000) })
     return response.ok ? (await response.json() as { say: string }).say : ''

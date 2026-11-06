@@ -181,6 +181,15 @@ test('never asleep, never twice in a day, never over a conversation, never to an
   assert.equal(nudge({ entries, state: { ...around, lastSeen: 0 } }), null)
 })
 
+test('study reviews that came due get mentioned, every other day at most', () => {
+  assert.equal(nudge({ reviews: 1 }).say, 'Tem uma pergunta de revisão do seu estudo esperando. Quer responder agora? É rapidinho.')
+  assert.equal(nudge({ reviews: 4, entries: [stale(5)] }).say, 'Tem quatro perguntas de revisão do seu estudo esperando. Quer fazer dez minutinhos agora?', 'a revisão vem antes do projeto parado')
+  assert.equal(nudge({ reviews: 4, followups: [FOLLOWUP] }).say, FOLLOWUP.ask, 'o que aconteceu ainda vem primeiro')
+  assert.equal(nudge({ reviews: 4, state: { ...around, nudged: { reviews: MORNING - DAY } } }), null, 'ontem já lembrou')
+  assert.ok(nudge({ reviews: 4, state: { ...around, nudged: { reviews: MORNING - 2 * DAY } } }))
+  assert.equal(nudge({ reviews: 0 }), null)
+})
+
 test('the same project waits a week', () => {
   const entries = [stale(5)]
   assert.equal(nudge({ entries, state: { ...around, nudged: { tcc: MORNING - 3 * DAY } } }), null)

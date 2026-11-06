@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## 1.14.0
+
+- **Só responde quando ouve “Jarvis”:** conversas no ambiente, como um atendimento no balcão, não viram mais pedidos. Antes, quando não entendia um pedaço do que alguém falava, ele pedia para repetir mesmo sem ter sido chamado, e então tomava a próxima frase de qualquer pessoa como pedido. Depois de cada resposta, ele também ficava 15 segundos ouvindo tudo sem precisar do nome; agora isso é uma opção em **Áudio**, desligada por padrão.
+- **Puxar assunto sem atrapalhar:** ele não puxa assunto se ouviu alguém conversando nos últimos 3 minutos, e passa a lembrar das perguntas de revisão do quiz que ficaram esperando (no máximo a cada 2 dias).
+- **Clima mais rápido:** a localização da cidade é lembrada e a previsão é reaproveitada por 10 minutos, então “e amanhã?” logo depois responde sem buscar de novo.
+- A avaliação de inteligência mede o tempo só da resposta, sem as esperas do próprio teste, e aceita qualquer forma correta de dizer um horário.
+
 ## 1.13.0
 
 - **Corrigido:** na 1.12.0, uma frase podia ser descartada como “só ruído” quando a transcrição rápida demorava a perceber que alguém falava. Agora, sem texto da transcrição rápida, a frase sempre é conferida pela transcrição comum. Quando era mesmo só barulho, a transcrição rápida continua ligada para a próxima frase.

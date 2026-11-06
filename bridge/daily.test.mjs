@@ -28,6 +28,22 @@ test('a Brazilian city wins, unless the user named somewhere else', async () => 
   assert.match((await fetchWeather('Palmas, Espanha', { fetcher: weatherFetch(places) })).city, /Canárias/)
 })
 
+test('a city is looked up once, and a forecast is reused for ten minutes', async () => {
+  const urls = []
+  const inner = weatherFetch([{ name: 'Balsas', admin1: 'Maranhão', country: 'Brasil', country_code: 'BR', latitude: -7.5, longitude: -46 }])
+  const fetcher = async (url) => { urls.push(String(url).includes('geocoding') ? 'cidade' : 'previsão'); return inner(url) }
+  let clock = 0
+  const now = () => clock
+  await fetchWeather('Balsas', { fetcher, now })
+  await fetchWeather(' balsas ', { fetcher, now })
+  assert.deepEqual(urls, ['cidade', 'previsão'])
+  await fetchWeather('Balsas', { fetcher, now, days: 3 })
+  assert.deepEqual(urls, ['cidade', 'previsão', 'previsão'], 'outros dias são outra previsão')
+  clock = 11 * 60 * 1000
+  await fetchWeather('Balsas', { fetcher, now })
+  assert.deepEqual(urls, ['cidade', 'previsão', 'previsão', 'previsão'], 'passados dez minutos, busca de novo; a cidade não')
+})
+
 test('an unknown city and a failing service each say so plainly', async () => {
   await assert.rejects(fetchWeather('Xyzzy', { fetcher: weatherFetch([]) }), /Não encontrei a cidade Xyzzy/)
   await assert.rejects(fetchWeather('Balsas', { fetcher: async () => reply({}, false) }), /serviço de clima/)

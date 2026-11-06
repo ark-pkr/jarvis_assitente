@@ -39,7 +39,7 @@ import { calendarServer, fromEnvironment as connectedCalendar } from './calendar
 import { handleLearned, learned, learnedNotes, learnFrom, summarise } from './learned.mjs'
 import { libraryServer } from './library.mjs'
 import { studyServer } from './study.mjs'
-import { quizNote } from './quiz.mjs'
+import { quiz, quizNote } from './quiz.mjs'
 import { handleLectures } from './lecture.mjs'
 import { background, backgroundServer, handleTasks } from './background.mjs'
 import { watchCalendar } from './foresight.mjs'
@@ -167,7 +167,7 @@ const handleRequest = async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url?.startsWith('/assistant/briefing')) return handleBriefing(req, res, cors)
-  if (req.method === 'GET' && req.url === '/assistant/nudge') return handleNudge(req, res, cors, { memory: assistantMemory, notes: learned })
+  if (req.method === 'GET' && req.url === '/assistant/nudge') return handleNudge(req, res, cors, { memory: assistantMemory, notes: learned, exams: quiz })
   if (req.url === '/learned') return handleLearned(req, res, cors)
   if (req.url === '/tasks') return handleTasks(req, res, cors)
   if (req.url === '/backup') return handleBackup(req, res, cors)

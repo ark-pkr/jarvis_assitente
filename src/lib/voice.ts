@@ -11,6 +11,15 @@ import { diag, drop } from './voiceDiag'
 import { startBrowserVoice } from './browserVoice'
 
 export { diag } from './voiceDiag'
+
+/**
+ * When someone in the room last said a whole sentence while he was quiet,
+ * whether or not it was meant for him. He uses it to stay out of a
+ * conversation he is not part of, like a customer at the counter.
+ */
+let roomSpokeAt = 0
+export const lastRoomSpeech = () => roomSpokeAt
+const ROOM_SENTENCE_MS = 800
 import { createSpeakerRecognizer, profileFromBase64, scoreSpeaker } from './speakerIdentity'
 import { segmentMaySend, startLocalWake, type LocalWake } from './localWake'
 import type { Eagle, EagleProfile } from '@picovoice/eagle-web'
@@ -282,6 +291,13 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
 
       if (!said) {
         drop('nothing intelligible in the segment')
+        // Asking to repeat is answering, so it obeys the same rule as an answer:
+        // only to his name, or inside a moment he was already being spoken to.
+        // It used to come before that check, and a busy room, a customer at the
+        // counter, is full of half-heard sentences: he kept saying "repita esse
+        // trecho" to them, then took the next thing anyone said as the repeat.
+        const forHim = !window.jarvisDesktop || WAKE.test(clarification ?? '') || addressed || Date.now() <= addressedUntil
+        if (!forHim) return
         if (mode !== 'guard' && clarification) h.onClarification(clarification)
         else if (mode !== 'guard') h.onPartial('Não entendi com clareza. Diga “Jarvis” e repita o pedido completo.')
         return
@@ -383,7 +399,9 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
   vad = await startVad({
     mayBarge: h.mayBarge,
     onBarge: () => {
-      addressedUntil = Date.now() + 30000
+      // The interrupting sentence is his either way. The window after it is
+      // the same follow-up choice as after an answer.
+      addressedUntil = Date.now() + (useWorkspace.getState().settings.followUp ? 30000 : 5000)
       addressedAtStart = true
       h.onSpeechStart()
     },
@@ -415,7 +433,8 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       unsent = []
     },
     onDiscard: closeStream,
-    onEnd: (blob) => {
+    onEnd: (blob, ms) => {
+      if (ms >= ROOM_SENTENCE_MS && ['wake', 'command'].includes(h.mode())) roomSpokeAt = Date.now()
       const streaming = stream
       stream = null
       unsent = []
