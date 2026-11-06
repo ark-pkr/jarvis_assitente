@@ -30,7 +30,7 @@ export const THINK_HARDER = 'pensar_melhor'
 
 export const THINK_HARDER_DECLARATION = {
   name: THINK_HARDER,
-  description: 'Passa este pedido para um raciocínio mais profundo. Chame ANTES de responder quando a resposta depender de cálculo com vários passos, lógica, comparação de opções, decisão importante para o usuário, diagnóstico de um erro ou qualquer coisa em que você não tenha certeza. Não chame para conversa, fatos simples ou ações diretas.',
+  description: 'Passa este pedido para um raciocínio mais profundo. Chame ANTES de responder quando a resposta depender de lógica com vários passos, comparação de opções, decisão importante para o usuário, diagnóstico de um erro ou qualquer coisa em que você não tenha certeza. Não chame para contas nem datas: monte a expressão e use calcular ou datas, que são exatas e mais rápidas. Não chame para conversa, fatos simples ou ações diretas.',
   parametersJsonSchema: { type: 'object', properties: {} },
 }
 
@@ -50,31 +50,37 @@ const SERVERS = [
   ['jarvis_lessons', /\bpdf\b|\baula|\bapostila/],
   ['jarvis_assistant', /\bhoje\b|\bo que (eu )?tenho\b|\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b|\bamanha\b|\bdia\b|lembr|\btarefa|rotina|\bparei\b|continu|\bfoco\b|lento|desempenho|\bcpu\b|\bdisco\b|memoria|\bestudo|flashcard|\bmaterial\b|\btimer\b|cronomet|temporizador|pomodoro|\bminutos?\b/],
   ['jarvis_study', /prova oral|\bprova\b|me test[ae]|me pergunt|me examin|\bquiz\b|simulado|\brevis[ao]|\baula|professor|\bmateria\b/],
+  // Sums and calendars go to code, which does not miscount.
+  ['jarvis_math', /\bquant[oa]s?|\bcalcul|por cento|%|\bjuros|\bsoma|\bmultiplic|\bdivid|\btroco|\bmedia\b|\bporcentagem|\bdesconto|daqui a|\bdias?\b|\bsemanas?\b|\bmes(es)?\b|\bque dia\b|dia da semana|\bdias uteis/],
+  // A recording to hear. It finds the file through the authorized folders, so those come too.
+  ['jarvis_listen', /\baudios?\b|\bgravac|\bgravei|\bvideo\b|\bmp3\b|\bmp4\b|\bogg\b|\bopus\b|transcrev|transcric|\bouc[ae]|\bescut[ae]/],
   ['jarvis_tasks', /segundo plano|me avis|enquanto isso|\bpesquis\w* .*\bavis|resultado da pesquisa|terminou a pesquisa|\bo que (voce )?achou\b/],
   // A recommendation names titles, and a title has to be checked against the web.
   ['jarvis_daily', /\blivros?\b|\bfilmes?\b|\bseries?\b|\bautora?\b|\bescritora?\b|\brecomend|\bindica\b|\bsugest|\bsugir|\bleitura\b|\bromance\b|\bfantasia\b|\bficcao\b|clima|\btempo\b|chuva|chove|temperatura|previsao|calor|\bfrio\b|musica|\bfaixa|volume|\bsom\b|\bmudo\b|\bpausa\b|\bpause\b|\btoca|\bspotify|pesquis|notici|\bpreco|cotacao|\bdolar\b|\beuro\b|\bplacar|\bjogo\b|resultado|\bquem ganhou|\bquanto (?:foi|esta|custa)/],
   ['jarvis_calendar', /\bagenda\b|calendario|\bcompromisso|\breuni[ao]|\bevento|\bconsulta\b|\bmarc[aeo]\w*|\bdesmarc|\bo que (eu )?tenho\b|\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b|\bestou livre\b|\bhorario livre\b/],
-  ['jarvis_eyes', /\bcamera\b|\bolh[ae]|\bveja\b|\bvendo\b|\btela\b|esse erro|essa janela|segurando/],
+  ['jarvis_eyes', /\bcamera\b|\ble (isso|essa|esse)\b|\bleia (isso|essa|esse)\b|essa (folha|pagina|conta|nota|receita|questao)|esse (papel|livro|exercicio|boleto|recibo|cupom)|\bolh[ae]|\bveja\b|\bvendo\b|\btela\b|esse erro|essa janela|segurando/],
   ['jarvis_chrome', /pesquis|procur|\bbusc|notici|\batual|\bagora\b|\bhoje\b|\bpreco|cotacao|\bsite\b|navegador|\bgoogle\b|internet|\be-?mail|\bquem e\b|resultado|\bjogo\b/],
 ]
 
 /**
- * Counting days on a calendar, which the light model gets wrong one time in three
- * ("segunda + 10 dias" came out quarta). Days and longer only: "daqui a 10 minutos"
- * is a timer, and must stay quick.
+ * A word problem: quantities that depend on each other ("o dobro do que sobrou", "o
+ * triplo da minha idade"). The arithmetic is easy and goes to `calcular`; reading the
+ * sentence right is the hard part, and the light model read 5 - 2 + 2*3 as 6.
  */
-const DATES = /\bdaqui a \S+ (dias?|semanas?|meses|mes|anos?)\b|\bdentro de \S+ (dias|semanas|meses)\b|\bha \S+ (dias|semanas|meses|anos)\b|\bfaz \S+ (dias|semanas|meses|anos)\b|\bdia da semana\b|\bque dia (sera|foi|cai|caiu|era)\b|\bfaltam? \S+ dias\b|\bquantos dias\b|\bdias? (depois|antes) de\b/
-const SUMS = /\bquanto|\bcalcul|por cento|\bjuros|\bdobro|\btriplo|\bmetade|\btroco|\bsoma|\bmultiplic|\bdivid/
+const WORD_PROBLEM = /\bdobro|\btriplo|\bquadruplo|\bmetade|\bsobr|\brest(a|ou|aram|ante)\b|\bfico\b|\bfiquei\b|\bidade\b|\bcada um\b/
 const REASONING = /\bpor que\b|\bcompar[ae]|\banalis|\bplano de\b|\bestrategi|\barquitetura|\balgoritmo|\bprove\b|\bdemonstr|\bdeduz|\bvantagens\b|\bdepur/
 
 /**
- * Whether a wrong answer here would come from thinking too little. The light model
- * is quick and fine for almost everything, and it also said 1.201 for a sum whose
- * answer is 1.210. Two numbers and a word of arithmetic is enough to notice.
+ * Whether a wrong answer here would come from thinking too little.
+ *
+ * Sums and calendar counting used to be in here, because the light model said
+ * 1.201 for a sum whose answer is 1.210. They go to `calcular` and `datas` now,
+ * which do not miscount, and sending them to the deep model as well only made a
+ * compound-interest question take 24 s instead of 4. What is left is reasoning.
  */
 export function isHardRequest({ content = '' } = {}) {
   const text = plain(content)
-  return REASONING.test(text) || DATES.test(text) || (SUMS.test(text) && (text.match(/\d+/g)?.length ?? 0) >= 2)
+  return REASONING.test(text) || (WORD_PROBLEM.test(text) && /\d/.test(text))
 }
 
 /**
@@ -89,6 +95,8 @@ export function routeTools({ content = '', context = [], mode, fast = false, art
   const matching = (text) => new Set(SERVERS.filter(([, words]) => words.test(plain(text))).map(([server]) => server))
   const own = matching(content)
   if (windowContext) own.add('jarvis_eyes')
+  // A recording is found through the authorized folders.
+  if (own.has('jarvis_listen')) own.add('jarvis_projects')
   // In an exam, "é o tcp" names no tool and still has to reach the one that grades it.
   if (studying) own.add('jarvis_study')
   // Only a bare "sim" or "continue" takes its meaning from what came before.

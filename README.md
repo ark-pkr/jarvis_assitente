@@ -49,6 +49,12 @@ Ele só atende quando ouve **“Jarvis”**, então conversas no ambiente não v
 
 **Olhar a tela.** Diga “olha minha tela, que erro é esse?”. Cada captura pede sua confirmação e mostra o motivo. A janela do JARVIS sai da frente, a imagem da tela onde está o cursor vai ao Gemini e não fica salva. Só funciona no aplicativo. Feche antes o que não quiser mostrar.
 
+**Contas e datas exatas.** Somas, porcentagens, juros, troco, médias e contas de calendário são feitas por uma calculadora, não pelo modelo: “quanto é 15% de 230?”, “que dia cai daqui a 45 dias?”, “quantos dias úteis até 25/12?”.
+
+**Áudios e vídeos.** Com o arquivo numa pasta autorizada, diga “resume esse áudio” ou “o que foi decidido nessa gravação?”. Ele transcreve, resume, lista tarefas citadas e responde perguntas sobre o conteúdo. Aceita MP3, M4A, OGG/OPUS (áudio do WhatsApp), WAV, MP4, MOV e WEBM, até 150 MB. O arquivo vai ao Gemini e é apagado de lá logo depois.
+
+**Rotina falada.** “Todo dia às 7h me fala o clima e a agenda”: no horário, ele fala o resumo do dia, com clima (da cidade em **Central**), compromissos, lembretes, tarefas e próximo passo.
+
 **Clima, música e volume.** Pergunte o clima de qualquer cidade (dados do [Open-Meteo](https://open-meteo.com/), sem chave) e diga a cidade padrão em **Central**. “Pausa a música”, “próxima faixa” e “volume em trinta” funcionam sem confirmação. As teclas de mídia agem no player que o Windows considerar ativo.
 
 **Modos.** O seletor no topo alterna entre Assistente, Professor e Desenvolvedor. Em **Aprender** também há análise de sistemas, nível, tempo diário e objetivo.

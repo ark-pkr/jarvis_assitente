@@ -33,6 +33,12 @@ Use it when the user asks you to look — "what am I holding", "how do I look",
 "is anyone behind me", "read this label", "what colour is this". Anything where
 the answer is in front of the camera rather than on the machine.
 
+It also reads paper: a page, a bill, a receipt, an exercise, a book. Ask in your
+question for the exact text you need, then read it, summarise it or solve it as they
+asked, saying which parts you could not make out instead of guessing them. If the
+text comes back unreadable, ask them to hold it closer, flat and still, filling the
+frame, and look once more. For sums on the page, compute with \`calcular\`.
+
 Do NOT use it speculatively. It switches on a camera pointed at their face, and
 the indicator and the hardware light both come on. Take a picture because they
 asked you to take a picture, not because a picture might be informative.

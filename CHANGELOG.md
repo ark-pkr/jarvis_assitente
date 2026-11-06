@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 1.15.0
+
+- **Menos respostas sem ser chamado:** o nome só conta como chamado no começo ou no fim de uma frase (“Jarvis, abre o Word”, “abre o Word, Jarvis”). No meio de uma conversa (“esse é o tal do Jarvis”), ou quando a transcrição confunde uma palavra parecida com o nome, ele fica quieto. O registro passa a anotar por que cada pedido falado foi aceito, sem guardar o que foi dito.
+- **Contas sem erro:** somas, porcentagens, juros, médias e contas de datas (“que dia cai daqui a 45 dias?”, “quantos dias úteis até o Natal?”) agora são calculadas por código, e não “de cabeça” pelo modelo, que às vezes errava. E ficaram mais rápidas: cerca de 2 s em vez de 4 a 6 s, porque deixam de passar pelo modelo mais pesado. Problemas com enunciado (“o dobro do que sobrou”) continuam indo para ele.
+- **Ouve áudios e vídeos:** “resume esse áudio que minha mãe mandou” ou “o que foi dito nessa gravação da aula?”. Ele transcreve, resume, lista as tarefas citadas e responde perguntas sobre o conteúdo. O arquivo precisa estar numa pasta autorizada e é apagado do Gemini logo depois.
+- **Rotina falada no horário:** “todo dia às 7h me fala o clima e a agenda”. No horário, ele fala o resumo do dia: clima, compromissos, lembretes, tarefas e o próximo passo.
+- **Lê papel pela câmera:** folhas, contas, recibos, exercícios e livros, com foto em resolução maior quando a webcam permite. Ele diz o que não conseguiu ler, em vez de adivinhar.
+- **Pesquisa o que muda:** preços, cotações, notícias, prazos e versões são conferidos na internet antes da resposta, com a fonte. Quando não tem certeza e não dá para conferir, ele avisa logo no começo.
+
 ## 1.14.0
 
 - **Só responde quando ouve “Jarvis”:** conversas no ambiente, como um atendimento no balcão, não viram mais pedidos. Antes, quando não entendia um pedaço do que alguém falava, ele pedia para repetir mesmo sem ter sido chamado, e então tomava a próxima frase de qualquer pessoa como pedido. Depois de cada resposta, ele também ficava 15 segundos ouvindo tudo sem precisar do nome; agora isso é uma opção em **Áudio**, desligada por padrão.

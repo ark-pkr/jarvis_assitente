@@ -118,7 +118,7 @@ export function decideTool(name, privacyMode = false) {
     // without them JARVIS has no display at all. They also have to be named
     // here rather than left to the verb rules below, which read `ui_theme` as
     // a write and would hold the whole surface back behind ALLOW_WRITES.
-    if (server === 'jarvis' || server === 'jarvis_ui' || server === 'jarvis_memory' || server === 'jarvis_projects' || server === 'jarvis_desktop' || server === 'jarvis_word' || server === 'jarvis_lessons' || server === 'jarvis_assistant' || server === 'jarvis_daily' || server === 'jarvis_calendar' || server === 'jarvis_library' || server === 'jarvis_study' || server === 'jarvis_tasks') return true
+    if (server === 'jarvis' || server === 'jarvis_ui' || server === 'jarvis_memory' || server === 'jarvis_projects' || server === 'jarvis_desktop' || server === 'jarvis_word' || server === 'jarvis_lessons' || server === 'jarvis_assistant' || server === 'jarvis_daily' || server === 'jarvis_calendar' || server === 'jarvis_library' || server === 'jarvis_study' || server === 'jarvis_tasks' || server === 'jarvis_math' || server === 'jarvis_listen') return true
 
     // The browser server gates itself: clicking, filling and navigating to a
     // URL nobody vouched for each ask for on-screen approval inside the tool.

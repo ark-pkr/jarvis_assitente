@@ -222,8 +222,12 @@ test('an event about to start reaches the spoken reminders exactly once', async 
   assert.deepEqual(await watchCalendar({ connected: false }, memory, now), [])
 })
 
-test('sums, logic and real analysis go to the stronger model; small talk does not', () => {
-  for (const content of ['quanto rende 1000 reais a 10 por cento ao ano em 2 anos', 'tenho 5 maçãs, como 2 e compro o dobro do que sobrou', 'compare React e Vue', 'por que meu algoritmo está lento', 'monte um plano de estudos']) assert.equal(isHardRequest({ content }), true, content)
+test('word problems and real analysis go to the stronger model; sums go to the calculator; small talk to neither', () => {
+  for (const content of ['tenho 5 maçãs, como 2 e compro o dobro do que sobrou', 'compare React e Vue', 'por que meu algoritmo está lento', 'monte um plano de estudos']) assert.equal(isHardRequest({ content }), true, content)
+  for (const content of ['quanto rende 1000 reais a 10 por cento ao ano em 2 anos', 'quanto é 15% de 230']) {
+    assert.equal(isHardRequest({ content }), false, content)
+    assert.ok(routeTools({ content, fast: true }).has('jarvis_math'), content)
+  }
   for (const content of ['oi', 'que horas são', 'abre o word', 'qual é a capital da França']) assert.equal(isHardRequest({ content }), false, content)
 })
 
@@ -250,8 +254,11 @@ test('a recommendation carries the search that can check its titles', () => {
   assert.match(buildSystemPrompt({ content: 'oi' }), /REAL TITLES/)
 })
 
-test('counting days on a calendar thinks harder, and a timer stays quick', () => {
-  for (const content of ['se hoje é segunda, que dia será daqui a 10 dias?', 'que dia da semana cai 25 de dezembro?', 'faltam quantos dias pro natal?', 'há 3 semanas era que dia?', 'qual a data daqui a duas semanas?']) assert.equal(isHardRequest({ content }), true, content)
+test('counting days on a calendar goes to the date tool, and a timer stays quick', () => {
+  for (const content of ['se hoje é segunda, que dia será daqui a 10 dias?', 'que dia da semana cai 25 de dezembro?', 'faltam quantos dias pro natal?', 'há 3 semanas era que dia?', 'qual a data daqui a duas semanas?']) {
+    assert.equal(isHardRequest({ content }), false, content)
+    assert.ok(routeTools({ content, fast: true }).has('jarvis_math'), content)
+  }
   for (const content of ['me lembra daqui a 10 minutos', 'que dia é hoje?', 'foco de 25 minutos', 'daqui a pouco eu volto']) assert.equal(isHardRequest({ content }), false, content)
 })
 
