@@ -317,7 +317,12 @@ test('every search failing says so', async () => {
 })
 
 test('a cancelled task goes quiet', async () => {
-  const { background, memory } = await workers({ search: (query, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason))) })
+  // A slow machine can cancel before the search has even begun, so an
+  // already-aborted signal has to reject too, or the search waits forever.
+  const { background, memory } = await workers({ search: (query, { signal }) => new Promise((_, reject) => {
+    if (signal.aborted) return reject(signal.reason)
+    signal.addEventListener('abort', () => reject(signal.reason))
+  }) })
   const task = await background.start('pesquisa algo demorado')
   await new Promise((resolve) => setTimeout(resolve, 30))
   background.cancel(task.id)
