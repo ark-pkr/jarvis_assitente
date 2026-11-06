@@ -125,7 +125,7 @@ Depois disso, diga “o que tenho amanhã?” ou “marca dentista sexta às 15h
 
 ## Visual
 
-**Câmera viva**, **estrelas que reagem à voz**, **planetas em órbita** e **sons de interface** podem ser ligados ou desligados em **Áudio**. O **modo cinema** deixa só o buraco negro e a legenda em tela cheia: use a tecla **C**, o botão em **Áudio** ou diga “modo cinema”, e saia com **C** ou **Esc**. Com a janela principal fora de vista, um pequeno buraco negro fica no canto da tela mostrando o estado; clique nele para voltar.
+**Câmera viva**, **estrelas que reagem à voz**, **planetas em órbita**, **visual que acompanha a hora do dia** e **sons de interface** podem ser ligados ou desligados em **Áudio**. O **modo cinema** deixa só o buraco negro e a legenda em tela cheia: use a tecla **C**, o botão em **Áudio** ou diga “modo cinema”, e saia com **C** ou **Esc**. Com a janela principal fora de vista, um pequeno buraco negro fica no canto da tela mostrando o estado; clique nele para voltar.
 
 ## Privacidade e segurança
 

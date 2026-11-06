@@ -145,6 +145,7 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.liveCamera} onChange={(event) => workspace.setSettings({ liveCamera: event.target.checked })} />Câmera viva: o buraco negro acompanha o mouse</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.reactiveStars} onChange={(event) => workspace.setSettings({ reactiveStars: event.target.checked })} />Estrelas que reagem à voz</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.orbitingPlanets} onChange={(event) => workspace.setSettings({ orbitingPlanets: event.target.checked })} />Planetas em órbita que reagem à voz</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.dayCycle} onChange={(event) => workspace.setSettings({ dayCycle: event.target.checked })} />Buraco negro acompanha a hora do dia (mais calmo à noite)</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.uiSounds} onChange={(event) => workspace.setSettings({ uiSounds: event.target.checked })} />Sons de interface</label>
         <button onClick={() => { setOpen(false); setCinema(true) }}>Modo cinema</button>
         <p>Tela cheia só com o buraco negro e a legenda. Atalho: <b>C</b>. Para sair: <b>C</b> ou <b>Esc</b>. Por voz: “modo cinema”.</p>

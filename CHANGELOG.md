@@ -8,6 +8,7 @@
 - **Rotina falada no horário:** “todo dia às 7h me fala o clima e a agenda”. No horário, ele fala o resumo do dia: clima, compromissos, lembretes, tarefas e o próximo passo.
 - **Lê papel pela câmera:** folhas, contas, recibos, exercícios e livros, com foto em resolução maior quando a webcam permite. Ele diz o que não conseguiu ler, em vez de adivinhar.
 - **Pesquisa o que muda:** preços, cotações, notícias, prazos e versões são conferidos na internet antes da resposta, com a fonte. Quando não tem certeza e não dá para conferir, ele avisa logo no começo.
+- **Buraco negro mais vivo:** enquanto ele pensa a fundo numa pergunta difícil, dois jatos de luz saem dos polos. O disco ganhou cores de temperatura, vermelho na borda e branco-azulado perto do centro, e o lado que gira na sua direção fica mais azulado. À noite (22h às 5h) o visual fica mais escuro e calmo, sem sumir quando ele está ouvindo ou falando; dá para desligar em **Áudio**.
 
 ## 1.14.0
 

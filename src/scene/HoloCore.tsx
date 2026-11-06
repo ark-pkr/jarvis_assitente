@@ -6,6 +6,7 @@ import { useWorkspace } from '../workspace'
 import { BLACK_HOLE, VERTEX } from './holoShaders'
 import { DETAIL_LEVELS, nextQuality, pictureSize, SAMPLE_FRAMES } from './holoQuality'
 import { PLANETS, planetsAt } from './planets'
+import { daylight, dayShade } from './dayCycle'
 import { ACCENT, easeMood, feelingColour, MOODS, mix, moodFor, parseColour, type Rgb } from './sphereMood'
 
 /** Doing nothing does not need sixty frames, and the fan will thank it. */
@@ -16,6 +17,8 @@ const LOOK_AROUND = .14
 const LOOK_UP = .05
 /** The small window has to fit the whole disc across its width. */
 const MIRROR_ZOOM = .9
+/** The deep model reports itself as this tool while it thinks; the jets show for as long. */
+const DEEP_THOUGHT = /pensar melhor/
 
 function program(gl: WebGL2RenderingContext) {
   const made = gl.createProgram()
@@ -45,7 +48,7 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
   gl.enableVertexAttribArray(0)
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
 
-  const names = ['uTime', 'uTurn', 'uGlow', 'uZoom', 'uTint', 'uLevel', 'uBass', 'uMid', 'uTreble', 'uRipple', 'uThought', 'uSweep', 'uPush', 'uBare']
+  const names = ['uTime', 'uTurn', 'uGlow', 'uZoom', 'uTint', 'uLevel', 'uBass', 'uMid', 'uTreble', 'uRipple', 'uThought', 'uSweep', 'uPush', 'uBare', 'uJet', 'uDay']
   const places = Object.fromEntries(names.map((name) => [name, gl.getUniformLocation(made, name)]))
   const resolution = gl.getUniformLocation(made, 'uResolution')
   const accentPlace = gl.getUniformLocation(made, 'uAccent')
@@ -73,6 +76,10 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
   let push = 0
   let gather = 0
   let presence = 0
+  let jets = 0
+  let day = 1
+  let shade = dayShade(1)
+  let clockReadAt = -Infinity
   let reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   const resize = () => {
@@ -87,7 +94,7 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     const number = (name: string, value: number) => gl.uniform1f(places[name], value)
     number('uTime', elapsed)
     number('uTurn', turn)
-    number('uGlow', .5 + mood.glow * .55)
+    number('uGlow', (.5 + mood.glow * .55) * shade.glow)
     // Below 1 the mood leans in towards the speaker; the camera does the leaning.
     number('uZoom', scale / mood.size * (mirror ? MIRROR_ZOOM : 1))
     number('uTint', tint)
@@ -100,6 +107,8 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     number('uSweep', mood.sweep)
     number('uPush', push)
     number('uBare', mirror ? 1 : 0)
+    number('uJet', jets)
+    number('uDay', day)
     gl.uniform4fv(planetPlace, planetsAt(turn, gather, presence, bands))
     gl.uniform1fv(planetVoicePlace, PLANETS.map((world) => bands[world.voice]))
     gl.uniform2f(lookPlace, look.x * LOOK_AROUND, -look.y * LOOK_UP)
@@ -112,7 +121,19 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     const feeling = feelingNow(state)
     const wanted = moodFor(phase, feeling)
     mood = easeMood(mood, wanted, seconds)
-    turn += seconds * mood.spin * 1.6
+    // The clock moves slowly; once a minute is plenty.
+    if (elapsed - clockReadAt > 60 || seconds >= 1) {
+      clockReadAt = elapsed
+      day = useWorkspace.getState().settings.dayCycle ? daylight() : 1
+    }
+    // At night everything is calmer, but a phase that is working keeps half of its light.
+    const resting = phase === 'offline' || phase === 'dormant'
+    const night = dayShade(day)
+    shade = resting ? night : { glow: 1 - (1 - night.glow) / 2, spin: 1 - (1 - night.spin) / 2 }
+    turn += seconds * mood.spin * 1.6 * shade.spin
+    const deep = (phase === 'thinking' || phase === 'tooling') && DEEP_THOUGHT.test(state.activeTool ?? '')
+    jets += ((deep && !mirror ? 1 : 0) - jets) * (1 - Math.exp(-seconds * (deep ? 3 : 1.5)))
+    if (jets < .005) jets = 0
     const hearing = phase === 'listening' || phase === 'speaking'
     level += ((hearing ? target : 0) - level) * (1 - Math.exp(-seconds * 12))
     // The small window has neither the microphone nor the voice, only the level it is sent.
