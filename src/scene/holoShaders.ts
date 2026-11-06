@@ -8,7 +8,9 @@ void main() { gl_Position = vec4(aCorner, 0.0, 1.0); }`
  * Each ray is bent by the Schwarzschild term, so nothing here is drawn as an
  * arch: the bright curve over the shadow and the thin ring under it are the far
  * side of the disc, seen around the hole. Doppler beaming is why the side turning
- * towards the viewer is the brighter one.
+ * towards the viewer is the brighter one, and the bluer: the gas is coloured by its
+ * temperature as seen, so the hot inner edge runs white to blue-white and the
+ * outer gas cools to red. While the deep model thinks, two jets rise from the poles.
  *
  * The parts of a voice each own one thing. Bass carries the whole disc, the
  * middle sends a wave of light outwards, treble brightens the fine gas. Each
@@ -17,7 +19,7 @@ void main() { gl_Position = vec4(aCorner, 0.0, 1.0); }`
 export const BLACK_HOLE = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;
-uniform float uTime, uTurn, uGlow, uZoom, uTint, uLevel, uBass, uMid, uTreble, uRipple, uThought, uSweep, uPush, uBare;
+uniform float uTime, uTurn, uGlow, uZoom, uTint, uLevel, uBass, uMid, uTreble, uRipple, uThought, uSweep, uPush, uBare, uJet, uDay;
 uniform vec2 uLook;
 uniform vec3 uAccent;
 uniform vec4 uPlanets[3];
@@ -62,6 +64,31 @@ vec3 sky(vec3 d) {
   return nebula + star * bright + vec3(0.8, 0.85, 1.0) * faint;
 }
 
+// The colour of hot gas at a temperature, 1 being the inner edge seen from rest:
+// dull red where it is coolest, through orange and white, to blue-white past the hottest.
+vec3 blackbody(float t) {
+  vec3 c = mix(vec3(0.45, 0.04, 0.0), vec3(0.92, 0.2, 0.02), smoothstep(0.0, 0.3, t));
+  c = mix(c, vec3(1.0, 0.58, 0.2), smoothstep(0.3, 0.56, t));
+  c = mix(c, vec3(1.0, 0.9, 0.74), smoothstep(0.56, 0.84, t));
+  c = mix(c, vec3(0.84, 0.91, 1.0), smoothstep(0.84, 1.08, t));
+  return mix(c, vec3(0.6, 0.74, 1.0), smoothstep(1.08, 1.5, t));
+}
+
+// The two jets along the spin axis, as a glowing gas the rays pass through. Knots
+// of brighter gas run outwards along them, as if thrown off the poles.
+float jet(vec3 q) {
+  float y = abs(q.y);
+  if (y < 1.1) return 0.0;
+  float width = 0.1 + y * 0.045;
+  float spread = dot(q.xz, q.xz) / (width * width);
+  // A bright thread inside a fainter sheath, so it reads as a beam rather than smoke.
+  float core = exp(-spread) * 0.7 + exp(-spread * 6.0) * 1.2;
+  if (core < 0.004) return 0.0;
+  float knots = 0.55 + 0.45 * sin(y * 1.6 - uTime * 5.5);
+  float shimmer = 0.6 + 0.8 * noise(vec3(q.xz * 3.0, y * 0.9 - uTime * 3.0));
+  return core * knots * shimmer * smoothstep(1.1, 2.6, y) * exp(-y * 0.085) / width;
+}
+
 vec3 disc(vec3 at, vec3 ray) {
   float r = length(at.xz);
   opacity = 0.0;
@@ -81,8 +108,16 @@ vec3 disc(vec3 at, vec3 ray) {
   float gas = smoothstep(0.3, 0.72, mix(gas1, gas2, abs(t1 * 2.0 - 1.0)));
 
   float heat = pow(INNER / r, 0.85);
-  vec3 ramp = mix(vec3(0.9, 0.17, 0.02), vec3(1.0, 0.62, 0.24), smoothstep(0.2, 0.62, heat));
-  ramp = mix(ramp, vec3(1.0, 0.93, 0.8), smoothstep(0.62, 1.0, heat));
+
+  vec3 orbit = normalize(vec3(-at.z, 0.0, at.x));
+  float beta = min(0.6, sqrt(0.5 / (r - 1.0)));
+  float shift = sqrt(1.0 - beta * beta) / (1.0 + beta * dot(orbit, -ray)) * sqrt(1.0 - 1.0 / r);
+  float beaming = clamp(pow(shift, 3.2), 0.04, 4.5);
+
+  // Gas coming towards the viewer is seen hotter, so bluer; gas going away, redder.
+  vec3 ramp = blackbody(heat * mix(1.0, shift, 0.7));
+  // By day the colours are full; at night they lose a little of their fire.
+  ramp = mix(vec3(dot(ramp, vec3(0.3, 0.55, 0.15))), ramp, 0.8 + uDay * 0.2);
   ramp = mix(ramp, uAccent * (0.55 + heat), smoothstep(0.0, 0.5, uTint) * 0.85);
 
   float crest = fract(uTime * 0.5) * (OUTER - INNER) + INNER;
@@ -91,11 +126,6 @@ vec3 disc(vec3 at, vec3 ray) {
   float thought = pow(0.5 + 0.5 * front, 8.0) * uThought * 1.4;
   float scan = heading - uTime * 1.5;
   float sweep = pow(0.5 + 0.5 * cos(scan), 24.0) * uSweep * 1.6;
-
-  vec3 orbit = normalize(vec3(-at.z, 0.0, at.x));
-  float beta = min(0.6, sqrt(0.5 / (r - 1.0)));
-  float shift = sqrt(1.0 - beta * beta) / (1.0 + beta * dot(orbit, -ray)) * sqrt(1.0 - 1.0 / r);
-  float beaming = clamp(pow(shift, 3.2), 0.04, 4.5);
 
   opacity = edge * (0.35 + gas * 0.6);
   float grain = 0.14 + gas * gas * (1.5 + uTreble * 1.1);
@@ -184,6 +214,10 @@ void main() {
   vec3 colour = vec3(0.0);
   float through = 1.0;
   findNear(p, v, sqrt(h2));
+  // Where along each step the jets are read, different for each pixel, so the
+  // long steps far from the hole show as fine grain rather than bands.
+  float jitter = hash(vec3(gl_FragCoord.xy, 3.0));
+  vec3 jetColour = mix(vec3(0.55, 0.74, 1.0), uAccent, smoothstep(0.0, 0.5, uTint) * 0.35);
   for (int i = 0; i < 76; i++) {
     float r2 = dot(p, p), r = sqrt(r2);
     if (r < 1.03) { through = 0.0; break; }
@@ -193,6 +227,7 @@ void main() {
     vec3 np = p + nv * dt;
     float crossing = p.y * np.y < 0.0 ? p.y / (p.y - np.y) : 2.0;
     float world = anyNear ? planetAlong(p, np) : 2.0;
+    if (uJet > 0.01) colour += through * jetColour * (jet(mix(p, np, jitter * 0.5)) + jet(mix(p, np, jitter * 0.5 + 0.5))) * dt * uJet * 0.25;
     if (crossing < world) {
       vec3 light = disc(mix(p, np, crossing), normalize(nv));
       colour += through * light;
@@ -210,7 +245,7 @@ void main() {
   away.xy *= 1.0 + uPush * 0.14;
   colour += halo * mix(vec3(1.0, 0.76, 0.5), uAccent, smoothstep(0.0, 0.5, uTint) * 0.85) * 0.35;
   colour *= uGlow;
-  if (uBare < 0.5) colour += through * sky(normalize(away)) * (0.8 + abs(uPush) * 0.5);
+  if (uBare < 0.5) colour += through * sky(normalize(away)) * (0.8 + abs(uPush) * 0.5) * (0.75 + uDay * 0.25);
   // ACES, so the hottest gas rolls off to white instead of clipping.
   colour = clamp(colour * (2.51 * colour + 0.03) / (colour * (2.43 * colour + 0.59) + 0.14), 0.0, 1.0);
   vec3 shown = pow(colour, vec3(1.0 / 2.2));
