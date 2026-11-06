@@ -6,7 +6,7 @@
  * a list of old reminders read aloud at startup helps nobody.
  */
 
-export type Alert = { id: string; title: string; time: number; say?: string }
+export type Alert = { id: string; title: string; time: number; say?: string; brief?: boolean }
 
 const FRESH_MS = 10 * 60000
 const MOST_AT_ONCE = 3

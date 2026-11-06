@@ -36,6 +36,16 @@ test('reminders require timezone, fire once under concurrent ticks and survive r
   await new AssistantMemory(base).tick(now + 100000)
   assert.equal((await memory.read()).notifications.length, 1)
 })
+test('a daily briefing routine fires as a briefing, every day', async () => {
+  const { memory } = await fixture()
+  await memory.save({ kind: 'lembrete', title: 'Resumo da manhã', due: '2026-11-07T07:00:00-03:00', repeat: 'diario', brief: true })
+  await memory.save({ kind: 'lembrete', title: 'Remédio', due: '2026-11-07T07:00:00-03:00' })
+  await memory.tick(Date.parse('2026-11-07T10:00:30Z'))
+  const { notifications, entries } = await memory.read()
+  assert.equal(notifications.find((item) => item.title === 'Resumo da manhã').brief, true)
+  assert.equal(notifications.find((item) => item.title === 'Remédio').brief, undefined)
+  assert.equal(entries.find((item) => item.title === 'Resumo da manhã').due, '2026-11-08T07:00:00-03:00', 'volta amanhã no mesmo horário')
+})
 test('context reminders only trigger once and never persist the foreground window', async () => {
   const { memory } = await fixture()
   assert.throws(() => memory.save({ kind: 'lembrete', title: 'Sem gatilho' }), /data e hora ou de um contexto/)

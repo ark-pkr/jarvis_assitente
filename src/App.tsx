@@ -495,6 +495,12 @@ export default function App() {
    */
   /** Says what just came due, once he is free to. A reminder never talks over him. */
   const spokenAlerts = useRef(loadSpoken())
+  /** The full spoken briefing, as the greeting gives it, for a routine that asks for it at a set time. */
+  const dayBriefing = async () => {
+    const { city, personality, learn, remember } = useWorkspace.getState().settings
+    const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/briefing?city=${encodeURIComponent(city.trim())}&first=1&learn=${learn && remember ? 1 : 0}&formal=${personality === 'formal' ? 1 : 0}`, { signal: AbortSignal.timeout(4000) })
+    return response.ok ? ((await response.json()) as { line: string }).line : ''
+  }
   const checkAlerts = async () => {
     const response = await fetch(`${BRIDGE_HTTP_URL}/assistant/alerts`, { signal: AbortSignal.timeout(3000) })
     if (!response.ok) return
@@ -508,7 +514,9 @@ export default function App() {
     if (due.length) {
       for (const alert of due) spokenAlerts.current.add(alert.id)
       saveSpoken(spokenAlerts.current)
-      line = alertLine(due)
+      // A scheduled briefing is put together now, with the city only the app knows.
+      const briefing = due.some((alert) => alert.brief) ? await dayBriefing().catch(() => '') : ''
+      line = alertLine(due.map((alert) => (alert.brief && briefing ? { ...alert, say: briefing } : alert)))
     } else line = await nudge(before, timers.length > 0)
     if (!line || store.getState().phase !== before) return
 

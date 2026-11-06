@@ -42,6 +42,8 @@ import { studyServer } from './study.mjs'
 import { quiz, quizNote } from './quiz.mjs'
 import { handleLectures } from './lecture.mjs'
 import { background, backgroundServer, handleTasks } from './background.mjs'
+import { mathServer } from './math.mjs'
+import { listenServer } from './listen.mjs'
 import { watchCalendar } from './foresight.mjs'
 import { handleBriefing } from './briefing.mjs'
 import { handleNudge, rapport } from './rapport.mjs'
@@ -492,6 +494,8 @@ wss.on('connection', (socket, req) => {
         jarvis_library: libraryServer(ask),
         jarvis_study: studyServer(ask, (op, args) => send({ type: 'ui', op, args }), { userText: () => currentAsk }),
         jarvis_tasks: backgroundServer(),
+        jarvis_math: mathServer(),
+        jarvis_listen: listenServer(),
         // The user's own Chrome, over the extension's native-host socket. It
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.
@@ -709,6 +713,8 @@ wss.on('connection', (socket, req) => {
     }
 
     if (msg.type === 'ask' && typeof msg.text === 'string') {
+      // Which door a spoken request came through. Fixed words only, never the request.
+      if (['nome', 'nome no computador', 'janela após o nome', 'janela de conversa', 'sem checagem'].includes(msg.heardVia)) console.log(`[jarvis] pedido por voz aceito por: ${msg.heardVia}`)
       /**
        * Queued behind any interrupt that is still settling.
        *

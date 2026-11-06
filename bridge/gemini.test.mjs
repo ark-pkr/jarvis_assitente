@@ -306,11 +306,12 @@ test('the light model can hand a hard question up to the deep model, once', asyn
   const ai = fakeAI((request) => {
     seen.push({ model: request.model, level: request.config.thinkingConfig?.thinkingLevel,
       offered: Boolean(request.config.tools?.[0].functionDeclarations.some((declaration) => declaration.name === 'pensar_melhor')) })
-    return seen.length === 1 ? chunks({ functionCall: { name: 'pensar_melhor', args: {} } }) : chunks({ text: 'Doze anos.' })
+    return seen.length === 1 ? chunks({ functionCall: { name: 'pensar_melhor', args: {} } }) : chunks({ text: 'Agora não: termine o semestre.' })
   })
-  async function* input() { yield { message: { content: 'minha mãe tem o triplo da minha idade; em 12 anos terá o dobro. e eu?', fast: true } } }
+  // No word gives this away as hard, so only the light model itself can tell.
+  async function* input() { yield { message: { content: 'vale a pena eu trocar de faculdade agora?', fast: true } } }
   const session = geminiQuery({ prompt: input(), options: { ...defaults, model: 'gemini-3.5-flash', deepModel: 'gemini-3-pro' } }, { ai })
-  for await (const event of session) if (event.type === 'result') assert.equal(event.result, 'Doze anos.')
+  for await (const event of session) if (event.type === 'result') assert.equal(event.result, 'Agora não: termine o semestre.')
   assert.deepEqual(seen, [
     { model: 'gemini-3.5-flash', level: 'LOW', offered: true },
     { model: 'gemini-3-pro', level: 'HIGH', offered: false },

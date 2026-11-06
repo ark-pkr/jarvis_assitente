@@ -1,3 +1,4 @@
+import { takeHeard } from './voiceDiag'
 import type { Blade, Panel } from '../store'
 import { conversationContext, useWorkspace, flushWorkspace } from '../workspace'
 import { windowNote } from './windowContext'
@@ -519,7 +520,7 @@ export async function ask(
       const saved = conversationContext()
       // App has already added this question to the log. Send only prior turns.
       if (saved.context.at(-1)?.role === 'user' && saved.context.at(-1)?.text === prompt) saved.context.pop()
-      ws.send(JSON.stringify({ type: 'ask', text: prompt, id, ...saved, windowContext, fast: request.fast, article: request.article, privacyMode: request.privacyMode }))
+      ws.send(JSON.stringify({ type: 'ask', text: prompt, id, ...saved, windowContext, fast: request.fast, article: request.article, privacyMode: request.privacyMode, heardVia: takeHeard() }))
     } catch (err) {
       // The socket can go into CLOSING between connect() resolving and here.
       fail(err instanceof Error ? err : new Error(String(err)))

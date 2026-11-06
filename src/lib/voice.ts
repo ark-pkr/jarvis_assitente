@@ -6,8 +6,8 @@ import { openLiveStt, type LiveAnswer, type LiveMiss, type LiveStt } from './liv
 import { caps } from './capabilities'
 import { useWorkspace } from '../workspace'
 import { isExplicitInterruption } from './voiceGuard'
-import { WAKE, WAKE_DEBOUNCE, afterWake, isEcho, makeAssembler } from './utterance'
-import { diag, drop } from './voiceDiag'
+import { WAKE, WAKE_DEBOUNCE, afterWake, calledByName, isEcho, makeAssembler } from './utterance'
+import { diag, drop, markHeard } from './voiceDiag'
 import { startBrowserVoice } from './browserVoice'
 
 export { diag } from './voiceDiag'
@@ -296,7 +296,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
         // It used to come before that check, and a busy room, a customer at the
         // counter, is full of half-heard sentences: he kept saying "repita esse
         // trecho" to them, then took the next thing anyone said as the repeat.
-        const forHim = !window.jarvisDesktop || WAKE.test(clarification ?? '') || addressed || Date.now() <= addressedUntil
+        const forHim = !window.jarvisDesktop || calledByName(clarification ?? '') || addressed || Date.now() <= addressedUntil
         if (!forHim) return
         if (mode !== 'guard' && clarification) h.onClarification(clarification)
         else if (mode !== 'guard') h.onPartial('Não entendi com clareza. Diga “Jarvis” e repita o pedido completo.')
@@ -318,7 +318,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       diag.heard = said
       diag.heardAt = Date.now()
       if (window.jarvisDesktop) {
-        if (WAKE.test(said)) {
+        if (calledByName(said)) {
           // Local detection already answered to the name, so the transcript of
           // the same breath is the command rather than a second call.
           if (!localWake && Date.now() - lastWake <= WAKE_DEBOUNCE) {
@@ -331,20 +331,23 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
           const command = afterWake(said)
           if (!localWake) diag.wakes++
           if (!command) { addressedUntil = Date.now() + 30000; if (!localWake) h.onWake(''); return }
+          markHeard(localWake ? 'nome no computador' : 'nome')
           addressedUntil = 0; h.onWake(command); return
         }
         if (mode !== 'command' || (Date.now() > addressedUntil && !addressed)) {
-          drop('fala não dirigida ao Jarvis'); h.onPartial('Diga “Jarvis” antes do seu pedido.'); return
+          drop(WAKE.test(said) ? 'o nome apareceu no meio da frase, não como chamado' : 'fala não dirigida ao Jarvis'); h.onPartial('Diga “Jarvis” antes do seu pedido.'); return
         }
+        markHeard(addressed ? 'janela após o nome' : 'janela de conversa')
         addressedUntil = 0
-      }
+      } else markHeard('sem checagem')
 
       if (mode === 'wake') {
-        if (WAKE.test(said) && Date.now() - lastWake > WAKE_DEBOUNCE) {
+        if (calledByName(said) && Date.now() - lastWake > WAKE_DEBOUNCE) {
           lastWake = Date.now()
           diag.wakes++
           diag.dropped = ''
           diag.accepted++
+          markHeard('nome')
           h.onWake(afterWake(said))
         } else {
           drop(`heard "${said.slice(-40)}" — not his name`)

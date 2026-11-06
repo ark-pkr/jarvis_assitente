@@ -54,6 +54,17 @@ export function drop(why: string) {
   diag.dropped = why
 }
 
+/**
+ * Why the last spoken request was taken as his: a fixed word, never what was
+ * said. It rides along with that request to the bridge log, so an answer nobody
+ * asked for can be traced to the door it came through.
+ */
+export type HeardVia = 'nome' | 'nome no computador' | 'janela após o nome' | 'janela de conversa' | 'sem checagem'
+let heardVia: HeardVia | '' = ''
+export const markHeard = (via: HeardVia) => { heardVia = via }
+/** Read once: a request typed afterwards carries nothing. */
+export const takeHeard = () => { const via = heardVia; heardVia = ''; return via }
+
 if (typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__voice = diag
 }

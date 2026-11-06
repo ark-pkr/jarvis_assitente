@@ -66,7 +66,9 @@ export async function holdCamera(): Promise<HTMLVideoElement> {
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 1280, height: 720, facingMode: 'user' },
+      // Ideal, not exact: a webcam that cannot do 1080p still opens at what it can.
+      // The extra pixels are what make a printed page legible to the model.
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
     })
     const el = document.createElement('video')
     el.autoplay = true

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { OPEN_TOOLS, routeTools } from './tool-routing.mjs'
+import { OPEN_TOOLS, isHardRequest, routeTools } from './tool-routing.mjs'
 import { geminiQuery, localNow } from './gemini.mjs'
 import { uiServer } from './ui.mjs'
 import { dailyServer } from './daily.mjs'
@@ -120,4 +120,13 @@ test('without routing, every tool still goes out as before', async () => {
   assert.equal(requests[0].model, 'principal')
   assert.ok(names(requests[0]).includes('mcp__jarvis_ui__ui_reset'))
   assert.ok(!names(requests[0]).includes(OPEN_TOOLS))
+})
+
+test('word problems go to the deep model; plain sums and dates go to the calculator', () => {
+  assert.equal(isHardRequest({ content: 'tenho 5 maçãs, como 2 e compro o dobro do que sobrou. com quantas fico?' }), true)
+  assert.equal(isHardRequest({ content: 'minha mãe tem o triplo da minha idade e daqui a 12 anos vai ter o dobro. que idade eu tenho?' }), true)
+  assert.equal(isHardRequest({ content: 'compare python e java para iniciantes' }), true)
+  assert.equal(isHardRequest({ content: 'quanto é 15% de 230?' }), false)
+  assert.equal(isHardRequest({ content: 'quanto rende 1000 reais a 2% ao mês por 12 meses?' }), false)
+  assert.equal(isHardRequest({ content: 'que dia cai daqui a 45 dias?' }), false)
 })
