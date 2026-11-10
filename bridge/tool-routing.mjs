@@ -41,7 +41,7 @@ const FOLLOW_UP_WORDS = 4
 
 const SERVERS = [
   ['jarvis', /\bmostr|\bexib|\bpainel|\bpaineis|\bimagem|\bfoto|\bvideo|\btabela|\bgrafico|\bdesenh|\bgere\b|\bcamera\b/],
-  ['jarvis_ui', /interface|\btema\b|\bcores?\b|\bazul\b|\bverde\b|vermelh|\broxo\b|\breator\b|\besfera\b|helios|cinema|\btela cheia\b|\bfundo\b|personalidade|sarcast|ironic|\bhumor|\bpiada|engracad|mais serio|\bformal\b|puxa\w* assunto|iniciativa/],
+  ['jarvis_ui', /interface|\btema\b|\bcores?\b|\bazul\b|\bverde\b|vermelh|\broxo\b|\breator\b|\besfera\b|helios|cinema|\btela cheia\b|\bfundo\b|personalidade|sarcast|ironic|\bhumor|\bpiada|engracad|mais serio|\bformal\b|puxa\w* assunto|iniciativa|meteor|\bfusao\b|buracos? negros?|espetaculo/],
   ['jarvis_memory', /lembr|memoriz|\bguarde\b|\bprefer|\banot|sabe sobre mim|\besquec|combinamos|conversamos|falamos|decidimos|aquele assunto|\bontem\b/],
   ['jarvis_library', /meus (arquivos|materiais|documentos|textos)|minhas (anotacoes|apostilas|notas)|onde (eu )?(falei|li|vi|anotei)|indexa|\bbiblioteca\b/],
   ['jarvis_projects', /projeto|arquivo|\bpasta|\bcodigo|\bprograma|\bapi\b|\bsite\b|\bapp\b|\bbug\b|\berro\b|docker|\bteste|organiz|desfa[cz]/],

@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 1.16.0
+
+- **Abertura com voo:** ao abrir o JARVIS, a câmera vem de longe, passa pelas estrelas e para em frente ao buraco negro, enquanto o disco acende aos poucos (cerca de 6 s).
+- **Fusão de buracos negros:** de vez em quando (a cada 2 a 4 horas, só quando ele está quieto), um buraco negro menor aparece, gira cada vez mais rápido em volta do principal e se funde a ele, com um clarão e ondas que deformam as estrelas. O menor também entorta a luz em volta dele.
+- **Chuva de meteoros em datas especiais:** no Natal, no Ano-Novo e no seu aniversário (informe em **Áudio**), cai uma chuva de 1 minuto a cada 15 minutos, e sem pausa na virada do ano. Os meteoros que passam perto do buraco negro se curvam em volta dele.
+- **Aurora no céu:** cortinas de luz verde e roxa se movem devagar ao fundo, mais fortes à noite.
+- **Por voz:** “Jarvis, mostra a fusão dos buracos negros”, “faz uma chuva de meteoros” ou “mostra a abertura de novo”.
+- Cada efeito pode ser desligado em **Áudio**. Com “reduzir movimento” ligado no Windows, nenhum deles aparece.
+
 ## 1.15.0
 
 - **Menos respostas sem ser chamado:** o nome só conta como chamado no começo ou no fim de uma frase (“Jarvis, abre o Word”, “abre o Word, Jarvis”). No meio de uma conversa (“esse é o tal do Jarvis”), ou quando a transcrição confunde uma palavra parecida com o nome, ele fica quieto. O registro passa a anotar por que cada pedido falado foi aceito, sem guardar o que foi dito.
