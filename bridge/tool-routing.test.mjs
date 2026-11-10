@@ -130,3 +130,16 @@ test('word problems go to the deep model; plain sums and dates go to the calcula
   assert.equal(isHardRequest({ content: 'quanto rende 1000 reais a 2% ao mês por 12 meses?' }), false)
   assert.equal(isHardRequest({ content: 'que dia cai daqui a 45 dias?' }), false)
 })
+
+test('asking for a show on the black hole brings the interface tools, and "confusão" does not', () => {
+  assert.ok(quick('Jarvis, mostra uma chuva de meteoros').has('jarvis_ui'))
+  assert.ok(quick('faz a fusão dos buracos negros').has('jarvis_ui'))
+  assert.ok(!quick('que confusão no trânsito hoje').has('jarvis_ui'))
+})
+
+test('the show tool tells the interface which show to start', async () => {
+  const sent = []
+  const server = uiServer((op, args) => sent.push([op, args]))
+  await server.instance._registeredTools.ui_espetaculo.handler({ efeito: 'fusao' }, {})
+  assert.deepEqual(sent, [['spectacle', { kind: 'fusao' }]])
+})

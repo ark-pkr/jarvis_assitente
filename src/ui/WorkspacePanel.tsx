@@ -146,6 +146,11 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.reactiveStars} onChange={(event) => workspace.setSettings({ reactiveStars: event.target.checked })} />Estrelas que reagem à voz</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.orbitingPlanets} onChange={(event) => workspace.setSettings({ orbitingPlanets: event.target.checked })} />Planetas em órbita que reagem à voz</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.dayCycle} onChange={(event) => workspace.setSettings({ dayCycle: event.target.checked })} />Buraco negro acompanha a hora do dia (mais calmo à noite)</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.holoIntro} onChange={(event) => workspace.setSettings({ holoIntro: event.target.checked })} />Abertura com voo até o buraco negro ao abrir</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.aurora} onChange={(event) => workspace.setSettings({ aurora: event.target.checked })} />Aurora no céu de fundo</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.cosmicEvents} onChange={(event) => workspace.setSettings({ cosmicEvents: event.target.checked })} />Eventos raros: fusão de buracos negros e chuva de meteoros em datas especiais</label>
+        <label>Seu aniversário (dia/mês), para a chuva de meteoros
+          <input aria-label="Seu aniversário" placeholder="ex.: 15/08" maxLength={5} value={workspace.settings.birthday} onChange={(event) => workspace.setSettings({ birthday: event.target.value.replace(/[^\d/]/g, '') })} /></label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.uiSounds} onChange={(event) => workspace.setSettings({ uiSounds: event.target.checked })} />Sons de interface</label>
         <button onClick={() => { setOpen(false); setCinema(true) }}>Modo cinema</button>
         <p>Tela cheia só com o buraco negro e a legenda. Atalho: <b>C</b>. Para sair: <b>C</b> ou <b>Esc</b>. Por voz: “modo cinema”.</p>

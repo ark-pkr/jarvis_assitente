@@ -7,6 +7,7 @@ import { BLACK_HOLE, VERTEX } from './holoShaders'
 import { DETAIL_LEVELS, nextQuality, pictureSize, SAMPLE_FRAMES } from './holoQuality'
 import { PLANETS, planetsAt } from './planets'
 import { daylight, dayShade } from './dayCycle'
+import { askedShower, INTRO_DONE, INTRO_SECONDS, introAt, MERGER_SECONDS, mergerAt, meteorShower, NO_MERGER, nextMergerIn, takeSpectacles } from './cosmicEvents'
 import { ACCENT, easeMood, feelingColour, MOODS, mix, moodFor, parseColour, type Rgb } from './sphereMood'
 
 /** Doing nothing does not need sixty frames, and the fan will thank it. */
@@ -19,6 +20,12 @@ const LOOK_UP = .05
 const MIRROR_ZOOM = .9
 /** The deep model reports itself as this tool while it thinks; the jets show for as long. */
 const DEEP_THOUGHT = /pensar melhor/
+/** The usual camera distance; the opening flight starts several times further out. */
+const CAMERA_DISTANCE = 24
+/** The opening plays once per run of the app, not each time the canvas is rebuilt. */
+let introPlayed = false
+/** A merger on its own waits for a quiet moment: nothing being said or worked on. */
+const QUIET_PHASES = ['offline', 'dormant', 'listening']
 
 function program(gl: WebGL2RenderingContext) {
   const made = gl.createProgram()
@@ -48,13 +55,14 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
   gl.enableVertexAttribArray(0)
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
 
-  const names = ['uTime', 'uTurn', 'uGlow', 'uZoom', 'uTint', 'uLevel', 'uBass', 'uMid', 'uTreble', 'uRipple', 'uThought', 'uSweep', 'uPush', 'uBare', 'uJet', 'uDay']
+  const names = ['uTime', 'uTurn', 'uGlow', 'uZoom', 'uTint', 'uLevel', 'uBass', 'uMid', 'uTreble', 'uRipple', 'uThought', 'uSweep', 'uPush', 'uBare', 'uJet', 'uDay', 'uDistance', 'uLight', 'uWarp', 'uAurora', 'uMeteor', 'uFlash', 'uWaveTime', 'uWave']
   const places = Object.fromEntries(names.map((name) => [name, gl.getUniformLocation(made, name)]))
   const resolution = gl.getUniformLocation(made, 'uResolution')
   const accentPlace = gl.getUniformLocation(made, 'uAccent')
   const lookPlace = gl.getUniformLocation(made, 'uLook')
   const planetPlace = gl.getUniformLocation(made, 'uPlanets')
   const planetVoicePlace = gl.getUniformLocation(made, 'uPlanetVoice')
+  const companionPlace = gl.getUniformLocation(made, 'uCompanion')
   gl.uniform3fv(gl.getUniformLocation(made, 'uPlanetDeep'), PLANETS.flatMap((world) => world.deep.map((part) => part / 255)))
   gl.uniform3fv(gl.getUniformLocation(made, 'uPlanetPale'), PLANETS.flatMap((world) => world.pale.map((part) => part / 255)))
 
@@ -80,6 +88,17 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
   let day = 1
   let shade = dayShade(1)
   let clockReadAt = -Infinity
+  // The shows, each timed in seconds of picture since it began; null when not running.
+  const { holoIntro } = useWorkspace.getState().settings
+  let introSince: number | null = !mirror && active && holoIntro && !introPlayed && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : null
+  if (introSince !== null) introPlayed = true
+  let intro = introSince === null ? INTRO_DONE : introAt(0)
+  let mergerSince: number | null = null
+  let merger = NO_MERGER
+  let mergerDueAt = Date.now() + nextMergerIn()
+  let showerSince: number | null = null
+  let meteor = 0
+  let aurora = 0
   let reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   const resize = () => {
@@ -109,12 +128,52 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     number('uBare', mirror ? 1 : 0)
     number('uJet', jets)
     number('uDay', day)
+    number('uDistance', CAMERA_DISTANCE * intro.distance)
+    number('uLight', intro.light)
+    number('uWarp', intro.warp)
+    number('uAurora', aurora)
+    number('uMeteor', meteor)
+    number('uFlash', merger.flash)
+    number('uWaveTime', merger.waveTime)
+    number('uWave', merger.wave)
+    gl.uniform4f(companionPlace, merger.x, merger.y, merger.z, merger.size)
     gl.uniform4fv(planetPlace, planetsAt(turn, gather, presence, bands))
     gl.uniform1fv(planetVoicePlace, PLANETS.map((world) => bands[world.voice]))
-    gl.uniform2f(lookPlace, look.x * LOOK_AROUND, -look.y * LOOK_UP)
+    gl.uniform2f(lookPlace, look.x * LOOK_AROUND, -look.y * LOOK_UP + intro.pitch)
     gl.uniform3f(accentPlace, accent[0] / 255, accent[1] / 255, accent[2] / 255)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
   }
+  /** Starts and advances the opening, the merger and the meteors. */
+  const shows = (seconds: number, phase: string, rare: boolean, birthday: string) => {
+    for (const kind of takeSpectacles()) {
+      if (kind === 'abertura') introSince = 0
+      if (kind === 'fusao' && mergerSince === null) mergerSince = 0
+      if (kind === 'meteoros') showerSince = 0
+    }
+    // A still frame (seconds of 1) is not time passing in a show.
+    const step = seconds >= 1 ? 0 : seconds
+    if (introSince !== null) {
+      introSince += step
+      intro = introAt(introSince)
+      if (introSince >= INTRO_SECONDS) introSince = null
+    }
+    if (mergerSince === null && rare && Date.now() >= mergerDueAt && QUIET_PHASES.includes(phase) && !document.hidden) mergerSince = 0
+    if (mergerSince !== null) {
+      mergerSince += step
+      merger = mergerAt(mergerSince)
+      if (mergerSince >= MERGER_SECONDS) { mergerSince = null; merger = NO_MERGER; mergerDueAt = Date.now() + nextMergerIn() }
+    }
+    let asked = 0
+    if (showerSince !== null) {
+      showerSince += step
+      asked = askedShower(showerSince)
+      if (asked === 0 && showerSince > 1) showerSince = null
+    }
+    meteor = Math.max(asked, rare ? meteorShower(new Date(), birthday) : 0)
+  }
+  /** While a show runs, it gets every frame, and its cost says nothing about the GPU. */
+  const showing = () => introSince !== null || mergerSince !== null || meteor > 0
+
   const follow = (seconds: number) => {
     const state = useStore.getState()
     const { level: target, phase, ui } = state
@@ -122,10 +181,14 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     const wanted = moodFor(phase, feeling)
     mood = easeMood(mood, wanted, seconds)
     // The clock moves slowly; once a minute is plenty.
+    const settings = useWorkspace.getState().settings
     if (elapsed - clockReadAt > 60 || seconds >= 1) {
       clockReadAt = elapsed
-      day = useWorkspace.getState().settings.dayCycle ? daylight() : 1
+      day = settings.dayCycle ? daylight() : 1
     }
+    // Brighter in the dark, the way the real one is.
+    aurora += ((settings.aurora && !mirror ? .55 + .45 * (1 - day) : 0) - aurora) * (1 - Math.exp(-seconds * 1.5))
+    if (!mirror) shows(seconds, phase, settings.cosmicEvents, settings.birthday)
     // At night everything is calmer, but a phase that is working keeps half of its light.
     const resting = phase === 'offline' || phase === 'dormant'
     const night = dayShade(day)
@@ -174,14 +237,14 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     const gap = previous ? now - previous : RESTING_FRAME_MS
     const phase = useStore.getState().phase
     const resting = phase === 'offline' || phase === 'dormant'
-    if ((resting || mirror) && gap < RESTING_FRAME_MS - 2) return
+    if ((resting && !showing() || mirror) && gap < RESTING_FRAME_MS - 2) return
     previous = now
     const seconds = Math.min(gap / 1000, .1)
     elapsed += seconds
     follow(seconds)
     draw()
     // Only a frame that was asked for at full speed says anything about the GPU.
-    if (!resting && !mirror && !document.hidden) measure(gap)
+    if (!resting && !mirror && !document.hidden && !showing()) measure(gap)
   }
   const run = () => {
     cancelAnimationFrame(raf)

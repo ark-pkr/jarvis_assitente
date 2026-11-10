@@ -12,6 +12,10 @@ void main() { gl_Position = vec4(aCorner, 0.0, 1.0); }`
  * temperature as seen, so the hot inner edge runs white to blue-white and the
  * outer gas cools to red. While the deep model thinks, two jets rise from the poles.
  *
+ * Now and then something happens: the opening flight in from far away, a second,
+ * smaller hole that bends light of its own as it spirals in and merges, meteors
+ * and an aurora in the sky. The last two live in the sky, so they are lensed too.
+ *
  * The parts of a voice each own one thing. Bass carries the whole disc, the
  * middle sends a wave of light outwards, treble brightens the fine gas. Each
  * also owns one of the worlds, which sit on the same bent rays as the disc.
@@ -20,6 +24,9 @@ export const BLACK_HOLE = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;
 uniform float uTime, uTurn, uGlow, uZoom, uTint, uLevel, uBass, uMid, uTreble, uRipple, uThought, uSweep, uPush, uBare, uJet, uDay;
+// The rare shows: the opening flight, the aurora, meteors, and a second hole merging.
+uniform float uDistance, uLight, uWarp, uAurora, uMeteor, uFlash, uWaveTime, uWave;
+uniform vec4 uCompanion;
 uniform vec2 uLook;
 uniform vec3 uAccent;
 uniform vec4 uPlanets[3];
@@ -47,6 +54,57 @@ float starField(vec3 q, float rarity) {
   if (seed < rarity) return 0.0;
   return smoothstep(0.46, 0.0, length(fract(q) - 0.5)) * pow((seed - rarity) / (1.0 - rarity), 4.0);
 }
+// Curtains of green light turning violet as they rise, hung across the upper sky
+// behind the hole. Rays of brighter light run up them and drift slowly sideways.
+vec3 aurora(vec3 d) {
+  if (uAurora < 0.01 || d.z < 0.15) return vec3(0.0);
+  float x = d.x / d.z, y = d.y / d.z, t = uTime;
+  float base = 0.02 + 0.05 * sin(x * 2.3 + t * 0.07) + 0.025 * sin(x * 6.1 - t * 0.11);
+  float h = y - base;
+  float curtain = smoothstep(-0.012, 0.008, h) * exp(-max(h, 0.0) * 4.5);
+  if (curtain < 0.002) return vec3(0.0);
+  float rays = 0.08 + 0.92 * pow(noise(vec3(x * 42.0 + t * 0.15, t * 0.2, 0.0)), 2.2) * (0.55 + 0.45 * noise(vec3(x * 8.0 - t * 0.05, h * 3.0, 1.0)));
+  float folds = 0.3 + 0.7 * noise(vec3(x * 1.8 + t * 0.03, 5.0, 5.0));
+  vec3 colour = mix(vec3(0.12, 0.95, 0.45), vec3(0.58, 0.2, 0.9), smoothstep(0.02, 0.24, h));
+  return colour * curtain * rays * folds * smoothstep(0.15, 0.4, d.z) * 0.2 * uAurora;
+}
+
+// Meteors, each a short streak along a great circle of the sky. Each of eight
+// slots fires once a cycle, or not, as heavy as the shower is just then.
+vec3 meteors(vec3 d) {
+  if (uMeteor < 0.01) return vec3(0.0);
+  vec3 total = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    float slot = float(i);
+    float cycle = uTime / 2.6 + slot * 0.37;
+    float k = floor(cycle), progress = fract(cycle);
+    vec3 seed = vec3(k, slot, 11.0);
+    if (hash(seed) > uMeteor * 0.85) continue;
+    vec3 from = normalize(vec3(hash(seed + 1.0) * 1.3 - 0.65, hash(seed + 2.0) * 0.45 + 0.05, 1.0));
+    // Falling, and slanting one way or the other.
+    float slant = hash(seed + 3.0) - 0.5;
+    vec3 heading = normalize(vec3(slant * 2.4 + sign(slant) * 0.4, -1.0, 0.0));
+    heading = normalize(heading - from * dot(heading, from));
+    vec3 side = cross(from, heading);
+    float off = dot(d, side);
+    if (abs(off) > 0.003) continue;
+    float along = atan(dot(d, heading), dot(d, from));
+    // Fast, and over in the first half of its cycle.
+    float run = progress * 2.0;
+    if (run > 1.0) continue;
+    const float TAIL = 0.085;
+    float head = run * 0.5, behind = head - along;
+    if (behind < 0.0 || behind > TAIL) continue;
+    float life = smoothstep(0.0, 0.15, run) * smoothstep(1.0, 0.6, run);
+    float fade = 1.0 - behind / TAIL;
+    // Thin and faint at the end of the tail, a bright point at the head.
+    float width = 0.0000025 * (0.25 + 0.75 * fade);
+    float streak = exp(-off * off / width) * fade * fade + exp(-(off * off + behind * behind) / 0.000004) * 1.5;
+    total += mix(vec3(1.0, 0.86, 0.62), vec3(0.75, 0.88, 1.0), hash(seed + 4.0)) * streak * life;
+  }
+  return total * 1.6 * min(uMeteor * 1.5, 1.0);
+}
+
 // The sky behind the hole. It is read at the end of each bent ray, so it is lensed
 // like everything else: the clouds and stars smear around the shadow on their own.
 vec3 sky(vec3 d) {
@@ -61,7 +119,7 @@ vec3 sky(vec3 d) {
   float bright = starField(d * 300.0, 0.965) * 1.7;
   float faint = starField(d * 520.0, 0.93) * (0.16 + band * 0.5);
   vec3 star = mix(vec3(0.72, 0.82, 1.0), vec3(1.0, 0.8, 0.6), hash(floor(d * 300.0) + 7.0));
-  return nebula + star * bright + vec3(0.8, 0.85, 1.0) * faint;
+  return nebula + star * bright + vec3(0.8, 0.85, 1.0) * faint + aurora(d) + meteors(d);
 }
 
 // The colour of hot gas at a temperature, 1 being the inner edge seen from rest:
@@ -129,7 +187,7 @@ vec3 disc(vec3 at, vec3 ray) {
 
   opacity = edge * (0.35 + gas * 0.6);
   float grain = 0.14 + gas * gas * (1.5 + uTreble * 1.1);
-  return ramp * grain * edge * heat * 1.25 * beaming * (1.0 + uBass * 0.75 + wave + thought + sweep);
+  return ramp * grain * edge * heat * 1.25 * beaming * (1.0 + uBass * 0.75 + wave + thought + sweep) * uLight;
 }
 
 // Testing every world at every step of every ray costs half as much again as the
@@ -204,7 +262,7 @@ void main() {
   uv = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y);
   // The camera orbits, so the sky and the bright side of the disc shift while the hole stays put.
   float pitch = TILT + uLook.y;
-  vec3 p = vec3(sin(uLook.x) * cos(pitch), sin(pitch), -cos(uLook.x) * cos(pitch)) * 24.0;
+  vec3 p = vec3(sin(uLook.x) * cos(pitch), sin(pitch), -cos(uLook.x) * cos(pitch)) * uDistance;
   vec3 forward = normalize(-p);
   vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
   vec3 up = cross(forward, right);
@@ -213,17 +271,41 @@ void main() {
   float h2 = dot(h, h);
   vec3 colour = vec3(0.0);
   float through = 1.0;
+  // Far out in the opening flight, light runs straight: skip to where bending starts,
+  // and a ray that never gets that close sees only the sky.
+  bool marching = true;
+  float start = dot(p, p) - 900.0;
+  if (start > 0.0) {
+    float b = dot(p, v), gap = b * b - start;
+    if (b < 0.0 && gap > 0.0) p += v * (-b - sqrt(gap));
+    else marching = false;
+  }
   findNear(p, v, sqrt(h2));
+  // The smaller hole, while one is spiralling in: its own pull, and its own shadow.
+  vec3 other = uCompanion.xyz;
+  float otherSize = uCompanion.w;
   // Where along each step the jets are read, different for each pixel, so the
   // long steps far from the hole show as fine grain rather than bands.
   float jitter = hash(vec3(gl_FragCoord.xy, 3.0));
   vec3 jetColour = mix(vec3(0.55, 0.74, 1.0), uAccent, smoothstep(0.0, 0.5, uTint) * 0.35);
   for (int i = 0; i < 76; i++) {
+    if (!marching) break;
     float r2 = dot(p, p), r = sqrt(r2);
     if (r < 1.03) { through = 0.0; break; }
     if (r > 34.0 && dot(p, v) > 0.0) break;
     float dt = min(0.15 * (r - 0.75), 1.5);
     vec3 nv = v - 1.5 * h2 * p / (r2 * r2 * r) * dt;
+    if (otherSize > 0.0) {
+      vec3 q = p - other;
+      float qr = length(q);
+      if (qr < otherSize * 1.6) { through = 0.0; break; }
+      dt = min(dt, max(0.04, 0.3 * (qr - otherSize)));
+      nv = v - (1.5 * h2 * p / (r2 * r2 * r) + otherSize * q / (qr * qr * qr)) * dt;
+      // Pulled off its line by the second hole, the ray no longer keeps the first one's momentum.
+      vec3 turned = cross(p, nv);
+      h2 = dot(turned, turned) / dot(nv, nv);
+      nv = normalize(nv);
+    }
     vec3 np = p + nv * dt;
     float crossing = p.y * np.y < 0.0 ? p.y / (p.y - np.y) : 2.0;
     float world = anyNear ? planetAlong(p, np) : 2.0;
@@ -243,9 +325,36 @@ void main() {
   // Reading the sky further out draws it in towards the hole, and nearer in pushes it away.
   vec3 away = normalize(v);
   away.xy *= 1.0 + uPush * 0.14;
+  // After a merger, rings of stretched space run outwards across the sky.
+  float spread = length(uv);
+  if (uWave > 0.01) {
+    float front = uWaveTime * 0.32, behind = front - spread;
+    float rings = sin(behind * 70.0) * smoothstep(-0.02, 0.03, behind) * exp(-max(behind, 0.0) * 4.0);
+    away.xy *= 1.0 + rings * 0.035 * uWave;
+  }
   colour += halo * mix(vec3(1.0, 0.76, 0.5), uAccent, smoothstep(0.0, 0.5, uTint) * 0.85) * 0.35;
-  colour *= uGlow;
-  if (uBare < 0.5) colour += through * sky(normalize(away)) * (0.8 + abs(uPush) * 0.5) * (0.75 + uDay * 0.25);
+  colour *= uGlow * (1.0 + uFlash * 1.4);
+  // The merger's light: a ring of it around the shadow and a wash over everything near.
+  // The wash goes much sooner than the ring, so the shadow is black again while the ring still glows.
+  // Inside the shadow only at its height: even a trace of light there shows as grey once the
+  // picture is brightened for the screen.
+  float inShadow = smoothstep(0.15, 0.11, spread) * (1.0 - uFlash * uFlash * uFlash);
+  colour += uFlash * vec3(0.8, 0.9, 1.0) * (exp(-pow((spread - 0.165) * 24.0, 2.0)) * 2.5 + exp(-spread * 5.0) * 0.35 * uFlash) * (1.0 - inShadow);
+  if (uBare < 0.5) {
+    vec3 seen = sky(normalize(away));
+    // Flying in, the stars stream out from the middle: the sky read a little further in, several times.
+    // Offset differently for each pixel, so the streaks read as lines and not as dotted trails.
+    if (uWarp > 0.01) {
+      float shift = hash(vec3(gl_FragCoord.xy, 9.0));
+      for (int k = 1; k < 7; k++) {
+        vec3 inward = away;
+        inward.xy *= 1.0 - uWarp * 0.035 * (float(k) - shift);
+        seen += sky(normalize(inward)) * (1.0 - float(k) * 0.12);
+      }
+      seen /= 1.0 + 3.48 * smoothstep(0.0, 0.3, uWarp);
+    }
+    colour += through * seen * (0.8 + abs(uPush) * 0.5) * (0.75 + uDay * 0.25);
+  }
   // ACES, so the hottest gas rolls off to white instead of clipping.
   colour = clamp(colour * (2.51 * colour + 0.03) / (colour * (2.43 * colour + 0.59) + 0.14), 0.0, 1.0);
   vec3 shown = pow(colour, vec3(1.0 / 2.2));

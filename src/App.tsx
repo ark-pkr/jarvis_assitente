@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Scene } from './scene/Scene'
+import { requestSpectacle } from './scene/cosmicEvents'
 import { Hud } from './ui/Hud'
 import { MissionControl } from './ui/MissionControl'
 import { WorkspacePanel } from './ui/WorkspacePanel'
@@ -826,6 +827,9 @@ export default function App() {
           break
         case 'cinema':
           setCinema(a.on === true)
+          break
+        case 'spectacle':
+          if (['fusao', 'meteoros', 'abertura'].includes(a.kind)) requestSpectacle(a.kind)
           break
         case 'initiative':
           useWorkspace.getState().setSettings({ initiative: a.on === true })

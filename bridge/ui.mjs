@@ -536,6 +536,16 @@ export function uiServer(emit) {
         },
       ),
 
+      tool(
+        'ui_espetaculo',
+        'Mostra um efeito no buraco negro quando o usuário pedir: "fusao" (um segundo buraco negro gira em volta e se funde ao principal, com clarão e ondas no espaço, cerca de 25 s), "meteoros" (chuva de meteoros que se curvam em volta dele, cerca de 40 s) ou "abertura" (o voo de abertura até o buraco negro, cerca de 6 s).',
+        { efeito: z.enum(['fusao', 'meteoros', 'abertura']).describe('O efeito pedido.') },
+        async ({ efeito }) => {
+          emit('spectacle', { kind: efeito })
+          return ok('Efeito iniciado no buraco negro.')
+        },
+      ),
+
       tool('ui_reset', RESET_DESCRIPTION, {}, async () => {
         emit('reset', {})
         return ok('Interface restored.')
