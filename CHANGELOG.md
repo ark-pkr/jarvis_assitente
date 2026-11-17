@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 1.17.0
+
+- **Voz no seu computador, sem gastar o Gemini:** o JARVIS agora fala com a voz **Faber** (Piper), gerada no próprio PC. Nenhuma fala usa a cota do Gemini, a voz funciona até sem internet e cada frase fica pronta em menos de meio segundo. Na primeira vez, a voz é baixada sozinha (cerca de 85 MB, menos de 1 minuto) e conferida antes de ser usada; enquanto isso, a voz anterior continua falando. De madrugada ele fala mais baixo. Para voltar à voz do Gemini, desmarque **Voz local Faber** em **Áudio**.
+- **O buraco negro é a abertura:** a tela “INICIANDO O SISTEMA” com anéis saiu. Antes de iniciar, o buraco negro fica distante e apagado; ao iniciar, a câmera voa até ele, o disco acende e ele já fala a saudação, com o disco pulsando na voz. O tempo até ele começar a ouvir caiu de cerca de 9 s (na primeira abertura) para cerca de 4 s.
+- Quem preferir a tela antiga pode marcar **Tela de inicialização clássica (anéis)** em **Áudio**.
+
 ## 1.16.0
 
 - **Abertura com voo:** ao abrir o JARVIS, a câmera vem de longe, passa pelas estrelas e para em frente ao buraco negro, enquanto o disco acende aos poucos (cerca de 6 s).

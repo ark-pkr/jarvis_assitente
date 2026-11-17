@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 
 /** How long App holds the boot overlay up, by which opening is playing. */
-export const BOOT_MS = { full: 9200, short: 2300 }
+/** `hole`: long enough for the flight in to light the disc before he speaks over the rest of it. */
+export const BOOT_MS = { full: 9200, short: 2300, hole: 3800 }
 
 export type Phase =
   | 'offline'   // waiting for the click that unlocks audio
@@ -246,6 +247,8 @@ type State = {
   bootNote: string
   /** Whether this power-on plays the short opening rather than the full one. */
   bootShort: boolean
+  /** The black hole itself is the start-up: no overlay, the camera flies in and he speaks. */
+  holeBoot: boolean
   /** Cards currently on the display, newest last. */
   panels: Panel[]
   /** Blades currently open, newest last — which is also front-most. */
@@ -261,6 +264,7 @@ type State = {
   setLooking: (why: string | null) => void
   setBootNote: (n: string) => void
   setBootShort: (short: boolean) => void
+  setHoleBoot: (on: boolean) => void
   pushPanel: (p: Panel) => void
   clearPanels: () => void
   pushBlade: (b: Blade) => void
@@ -318,12 +322,14 @@ export const useStore = create<State>((set) => ({
   expandedBlade: null,
   bootNote: '',
   bootShort: false,
+  holeBoot: false,
   ui: defaultUi(),
 
   setVoice: (voice) => set({ voice }),
   setLooking: (looking) => set({ looking }),
   setBootNote: (bootNote) => set({ bootNote }),
   setBootShort: (bootShort) => set({ bootShort }),
+  setHoleBoot: (holeBoot) => set({ holeBoot }),
   // Three is as many as fits around the reactor without crowding it. Sticky
   // panels are exempt from the cull — the tool description promises they stay
   // until replaced, and a plain slice(-3) silently evicted them the moment a

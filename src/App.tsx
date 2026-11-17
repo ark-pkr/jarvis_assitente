@@ -15,6 +15,7 @@ import { Diagnostics } from './ui/Diagnostics'
 import { BOOT_MS, useStore, type Timer } from './store'
 import { lastRoomSpeech, startVoice, type Voice, type VoiceMode } from './lib/voice'
 import { createSpeaker, cycleVoice, currentVoiceName, speakingAloud } from './lib/tts'
+import { ensureLocalVoice } from './lib/localVoice'
 import { watchApproval, type Approval } from './lib/bridge'
 import { approvalQuestion, ASK_AGAIN, readAnswer } from './lib/approvalVoice'
 import { finishLecture, recordLecture, type LectureRecording } from './lib/lectureRecorder'
@@ -704,6 +705,10 @@ export default function App() {
     const { bootSeen, fullBoot } = useWorkspace.getState().settings
     const short = window.matchMedia('(prefers-reduced-motion: reduce)').matches || (bootSeen && !fullBoot)
     s.setBootShort(short)
+    // With the black hole on screen, it is the start-up: it flies in and he speaks.
+    const look = useWorkspace.getState().settings
+    const holeBoot = look.holoCore && look.visualTheme === 'sphere' && !look.classicBoot
+    s.setHoleBoot(holeBoot)
 
     // Must happen inside the click handler — browsers won't start an
     // AudioContext or speech synthesis without a user gesture.
@@ -867,13 +872,15 @@ export default function App() {
       }
     })
     const warming = warm().catch((err: Error) => s.setError(err.message))
+    // His voice on this computer: ready at once when installed, downloaded the first time.
+    if (useWorkspace.getState().settings.localVoice) void warming.then(() => ensureLocalVoice())
 
 
     // Long enough for the four-beat start-up sequence in Boot.tsx to play —
     // status bar, rings, suit schematic, reactor power-up — before the live
     // interface takes over. Kept a touch under the boot cue so the music is
     // still rising as the reactor lands.
-    await new Promise((r) => setTimeout(r, short ? BOOT_MS.short : BOOT_MS.full)) // boot sequence
+    await new Promise((r) => setTimeout(r, holeBoot ? BOOT_MS.hole : short ? BOOT_MS.short : BOOT_MS.full)) // boot sequence
     await warming
     useWorkspace.getState().setSettings({ bootSeen: true })
     store.getState().setConnected(connectedLabels())

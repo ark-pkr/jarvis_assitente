@@ -44,6 +44,7 @@ type Stage = 'bar' | 'rings' | 'suit' | 'reactor'
 
 export function Boot() {
   const phase = useStore((s) => s.phase)
+  const holeBoot = useStore((s) => s.holeBoot)
   const short = useStore((s) => s.bootShort)
   const reduced = useReducedMotion()
   const [t, setT] = useState(0)
@@ -67,7 +68,7 @@ export function Boot() {
     return () => clearInterval(id)
   }, [phase])
 
-  if (phase !== 'boot') return null
+  if (phase !== 'boot' || holeBoot) return null
 
   const stage: Stage = short
     ? t >= SHORT.reactor ? 'reactor' : 'rings'
