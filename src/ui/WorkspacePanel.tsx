@@ -10,6 +10,19 @@ import { AssistantPanel, AssistantAlerts } from './AssistantPanel'
 import { DesktopSettings } from './DesktopSettings'
 import { MicrophoneSettings } from './MicrophoneSettings'
 import { VoiceIdentitySettings } from './VoiceIdentitySettings'
+import { ensureLocalVoice, localVoiceState, onLocalVoice, type LocalVoiceState } from '../lib/localVoice'
+
+/** Where the local voice is: speaking, downloading, or why it is not. */
+function LocalVoiceNote({ on }: { on: boolean }) {
+  const [state, setState] = useState<LocalVoiceState>(localVoiceState())
+  useEffect(() => onLocalVoice(setState), [])
+  useEffect(() => { if (on) void ensureLocalVoice().then(setState) }, [on])
+  if (!on) return <p>Desligada: a voz vem do Gemini (usa a cota) ou do Windows.</p>
+  if (state.state === 'pronto') return <p>Faber está falando, no seu computador: não usa a cota do Gemini e funciona sem internet.</p>
+  if (state.state === 'baixando') return <p>Baixando a voz local: {state.progress}%. Enquanto isso, a voz anterior continua falando.</p>
+  if (state.state === 'erro') return <p>Não foi possível instalar a voz local ({state.error}). A voz anterior continua falando.</p>
+  return <p>Preparando a voz local…</p>
+}
 import { BackupPanel } from './BackupPanel'
 import { DiagnosticButton } from './DiagnosticButton'
 import { automaticBackup } from '../lib/backup'
@@ -130,7 +143,10 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.greeting} onChange={(event) => workspace.setSettings({ greeting: event.target.checked })} />Cumprimentar ao iniciar, com lembretes, tarefas e próximo passo</label>
         <p>O resumo completo é falado uma vez por dia; nas outras aberturas, só o cumprimento. Com a voz neural, esse texto passa pela API Gemini. Se houver cidade na Central, inclui o clima, que vem do Open-Meteo.</p>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.fullBoot} onChange={(event) => workspace.setSettings({ fullBoot: event.target.checked })} />Reproduzir sempre a abertura completa</label>
-        <label className="setting-check"><input type="checkbox" checked={workspace.settings.naturalVoice} onChange={(event) => workspace.setSettings({ naturalVoice: event.target.checked })} />Voz neural natural do Gemini</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.classicBoot} onChange={(event) => workspace.setSettings({ classicBoot: event.target.checked })} />Tela de inicialização clássica (anéis) em vez do buraco negro</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.naturalVoice} onChange={(event) => workspace.setSettings({ naturalVoice: event.target.checked })} />Voz neural natural do Gemini (quando a voz local estiver desligada)</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.localVoice} onChange={(event) => workspace.setSettings({ localVoice: event.target.checked })} />Voz local Faber, no computador, sem gastar o Gemini</label>
+        <LocalVoiceNote on={workspace.settings.localVoice} />
         <p>Usa a API Gemini para gerar áudio em português, com ritmo mais ágil e pausas curtas. Consome a cota de áudio da API e pode adicionar alguns segundos de espera. Se falhar, usa a voz do navegador.</p>
         <label>Voz neural<select aria-label="Voz neural" value={workspace.settings.neuralVoice} onChange={(event) => workspace.setSettings({ neuralVoice: event.target.value })}>
           <option value="Charon">Charon · suave e informativa</option><option value="Orus">Orus · firme</option><option value="Kore">Kore · clara e firme</option><option value="Puck">Puck · descontraída</option>

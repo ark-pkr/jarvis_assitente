@@ -153,8 +153,11 @@ function start(canvas: HTMLCanvasElement, active: boolean, mirror: boolean) {
     // A still frame (seconds of 1) is not time passing in a show.
     const step = seconds >= 1 ? 0 : seconds
     if (introSince !== null) {
-      introSince += step
+      // Waiting to be started, it holds far off and dark; starting him is what flies it in.
+      if (phase !== 'offline') introSince += step
       intro = introAt(introSince)
+      // Holding still, the stars are still too; they only streak once it moves.
+      if (phase === 'offline') intro = { ...intro, warp: 0 }
       if (introSince >= INTRO_SECONDS) introSince = null
     }
     if (mergerSince === null && rare && Date.now() >= mergerDueAt && QUIET_PHASES.includes(phase) && !document.hidden) mergerSince = 0

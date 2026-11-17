@@ -8,6 +8,7 @@ import { caps } from './capabilities'
 import { useWorkspace } from '../workspace'
 import { pickVoice } from './ttsVoices'
 import { fetchCloudAudio } from './ttsCloud'
+import { localVoiceReady, localVoiceUrl } from './localVoice'
 
 export { candidateVoices, cycleVoice } from './ttsVoices'
 
@@ -68,7 +69,7 @@ const ECHO_TAIL_MS = 1800
  * indistinguishable. This tells them apart at a glance.
  */
 export const diag = {
-  engine: 'system' as 'system' | 'elevenlabs' | 'gemini',
+  engine: 'system' as 'system' | 'elevenlabs' | 'gemini' | 'local',
   /** Utterances handed to an engine — the OS voice or an audio element. */
   spoken: 0,
   /**
@@ -109,6 +110,9 @@ if (typeof window !== 'undefined') {
  */
 let nativeBroken = false
 let neuralRetryAt = 0
+/** After the local voice fails, the next voice down speaks for a minute before it is tried again. */
+let localRetryAt = 0
+const localVoiceOn = () => useWorkspace.getState().settings.localVoice && localVoiceReady() && Date.now() >= localRetryAt
 
 let speakingAt = 0
 
@@ -176,6 +180,7 @@ const MAX_UNSPOKEN = 220
  *  always naming a speechSynthesis voice that a cloud or neural engine has
  *  quietly replaced. */
 export function currentVoiceName(): string {
+  if (localVoiceOn()) return 'Faber · voz local'
   if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) return `Gemini · ${useWorkspace.getState().settings.neuralVoice}`
   if (USE_ELEVENLABS || caps().tts) return 'ElevenLabs'
   return pickVoice()?.name ?? 'default'
@@ -250,6 +255,9 @@ export function createSpeaker(): Speaker {
   /** Voices already arriving, until their turn to play. */
   const streaming = new Map<string, Promise<Response | null>>()
   let streams = 0
+  /** Sentences going to the local voice, and those of them said quietly at night. */
+  const local = new Set<string>()
+  const quiet = new Set<string>()
   let nativeInFlight = false
   let activeFinish: (() => void) | null = null
   let drained: Array<() => void> = []
@@ -283,6 +291,16 @@ export function createSpeaker(): Speaker {
 
   /** null means "no audio pipeline, use the system voice directly". */
   function synthesise(text: string): Promise<string | null> | null {
+    // On this computer, at no cost: the one voice when it is installed.
+    if (localVoiceOn()) {
+      diag.engine = 'local'
+      const key = `stream:${++streams}`
+      local.add(key)
+      const hour = new Date().getHours()
+      if (hour >= 23 || hour < 6) quiet.add(key)
+      streaming.set(key, fetch(localVoiceUrl(text), { signal: controller.signal }).catch(() => null))
+      return Promise.resolve(key)
+    }
     if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) {
       diag.engine = 'gemini'
       // Started here, one sentence ahead, so the next sentence is already
@@ -352,9 +370,10 @@ export function createSpeaker(): Speaker {
         if (!streaming.has(url)) {
           if (await playUrl(url, item.text) || cancelled) return
         } else if (await playStream(url, item.text) || cancelled) return
-        // The neural voice failed before any sound came out. Same answer, plainer
+        // The voice failed before any sound came out. Same answer, plainer
         // voice, and no asking it again for a minute.
-        neuralRetryAt = Date.now() + 60000
+        if (local.has(url)) localRetryAt = Date.now() + 60000
+        else neuralRetryAt = Date.now() + 60000
         diag.lastError = 'voz-neural-indisponível'
       }
 
@@ -521,10 +540,13 @@ export function createSpeaker(): Speaker {
       const { voiceVolume, voiceRate } = useWorkspace.getState().settings
       diag.spoken++
       diag.lastText = text.slice(0, 60)
-      diag.voice = 'Gemini'
+      diag.voice = local.has(key) ? 'Faber (local)' : 'Gemini'
+      local.delete(key)
+      // Late at night the local voice is turned down; the Gemini one lowers its own.
+      const hushed = quiet.delete(key)
 
       const volume = ctx.createGain()
-      volume.gain.value = voiceVolume
+      volume.gain.value = voiceVolume * (hushed ? .7 : 1)
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 256
       volume.connect(analyser)

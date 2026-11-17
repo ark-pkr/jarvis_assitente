@@ -141,6 +141,7 @@ Depois disso, diga “o que tenho amanhã?” ou “marca dentista sexta às 15h
 
 - **Não ouve você:** pressione **D** e confira “transcription failures” e “error”. Verifique a entrada em **Áudio → Microfone de entrada** e **Configurações do Windows → Privacidade e segurança → Microfone**.
 - **Limite de uso:** a presença da chave não garante cota. Falhas reais aparecem ao enviar um pedido.
+- **Voz local:** por padrão ele fala com a voz **Faber**, gerada no próprio PC pela Piper, sem gastar o Gemini. Ela é baixada sozinha na primeira vez (cerca de 85 MB) e conferida antes de ser usada; o andamento aparece em **Áudio**. Se a voz local falhar, ele fala com a voz anterior por um minuto e tenta de novo.
 - **Voz muda de repente:** a cota de voz neural acabou. Frases curtas já faladas continuam com a voz neural, e o resto usa a voz do Windows até a cota voltar.
 - **Logs:** ficam em `%APPDATA%\JARVIS\desktop.log`. Para relatar um problema, use **Conexões → Copiar diagnóstico**.
 - **Consumo:** cada turno grava tokens e tempos, sem conteúdo, em `%APPDATA%\JARVIS\dados\metrics.jsonl`.
