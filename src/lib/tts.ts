@@ -112,7 +112,7 @@ let nativeBroken = false
 let neuralRetryAt = 0
 /** After the local voice fails, the next voice down speaks for a minute before it is tried again. */
 let localRetryAt = 0
-const useLocal = () => useWorkspace.getState().settings.localVoice && localVoiceReady() && Date.now() >= localRetryAt
+const localVoiceOn = () => useWorkspace.getState().settings.localVoice && localVoiceReady() && Date.now() >= localRetryAt
 
 let speakingAt = 0
 
@@ -180,7 +180,7 @@ const MAX_UNSPOKEN = 220
  *  always naming a speechSynthesis voice that a cloud or neural engine has
  *  quietly replaced. */
 export function currentVoiceName(): string {
-  if (useLocal()) return 'Faber · voz local'
+  if (localVoiceOn()) return 'Faber · voz local'
   if (useWorkspace.getState().settings.naturalVoice && caps().neuralTts && Date.now() >= neuralRetryAt) return `Gemini · ${useWorkspace.getState().settings.neuralVoice}`
   if (USE_ELEVENLABS || caps().tts) return 'ElevenLabs'
   return pickVoice()?.name ?? 'default'
@@ -292,7 +292,7 @@ export function createSpeaker(): Speaker {
   /** null means "no audio pipeline, use the system voice directly". */
   function synthesise(text: string): Promise<string | null> | null {
     // On this computer, at no cost: the one voice when it is installed.
-    if (useLocal()) {
+    if (localVoiceOn()) {
       diag.engine = 'local'
       const key = `stream:${++streams}`
       local.add(key)
