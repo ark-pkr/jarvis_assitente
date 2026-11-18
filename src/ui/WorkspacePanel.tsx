@@ -10,7 +10,7 @@ import { AssistantPanel, AssistantAlerts } from './AssistantPanel'
 import { DesktopSettings } from './DesktopSettings'
 import { MicrophoneSettings } from './MicrophoneSettings'
 import { VoiceIdentitySettings } from './VoiceIdentitySettings'
-import { ensureLocalVoice, localVoiceState, onLocalVoice, type LocalVoiceState } from '../lib/localVoice'
+import { ensureLocalVoice, ensureLocalWatcher, localVoiceState, localWatcherState, onLocalVoice, onLocalWatcher, type LocalVoiceState } from '../lib/localVoice'
 
 /** Where the local voice is: speaking, downloading, or why it is not. */
 function LocalVoiceNote({ on }: { on: boolean }) {
@@ -22,6 +22,18 @@ function LocalVoiceNote({ on }: { on: boolean }) {
   if (state.state === 'baixando') return <p>Baixando a voz local: {state.progress}%. Enquanto isso, a voz anterior continua falando.</p>
   if (state.state === 'erro') return <p>Não foi possível instalar a voz local ({state.error}). A voz anterior continua falando.</p>
   return <p>Preparando a voz local…</p>
+}
+
+/** Where the watcher is: listening here, downloading, or why it is not. */
+function WatcherNote({ on }: { on: boolean }) {
+  const [state, setState] = useState<LocalVoiceState>(localWatcherState())
+  useEffect(() => onLocalWatcher(setState), [])
+  useEffect(() => { if (on) void ensureLocalWatcher().then(setState) }, [on])
+  if (!on) return <p>Desligado: toda fala vai para a transcrição do Gemini, que confere se você disse “Jarvis”.</p>
+  if (state.state === 'pronto') return <p>O vigia está ouvindo no seu computador. Só as frases em que você chama “Jarvis” vão para o Gemini; o resto nunca sai do PC.</p>
+  if (state.state === 'baixando') return <p>Baixando o vigia: {state.progress}%. Enquanto isso, a escuta continua como antes.</p>
+  if (state.state === 'erro') return <p>Não foi possível instalar o vigia ({state.error}). A escuta continua como antes.</p>
+  return <p>Preparando o vigia…</p>
 }
 import { BackupPanel } from './BackupPanel'
 import { DiagnosticButton } from './DiagnosticButton'
@@ -146,7 +158,10 @@ export function WorkspacePanel({ onStop, onPauseVoice, onResumeVoice, onRepeat, 
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.classicBoot} onChange={(event) => workspace.setSettings({ classicBoot: event.target.checked })} />Tela de inicialização clássica (anéis) em vez do buraco negro</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.naturalVoice} onChange={(event) => workspace.setSettings({ naturalVoice: event.target.checked })} />Voz neural natural do Gemini (quando a voz local estiver desligada)</label>
         <label className="setting-check"><input type="checkbox" checked={workspace.settings.localVoice} onChange={(event) => workspace.setSettings({ localVoice: event.target.checked })} />Voz local Faber, no computador, sem gastar o Gemini</label>
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.conversationBox} onChange={(event) => workspace.setSettings({ conversationBox: event.target.checked })} />Mostrar a caixa com a conversa (em vez de só a legenda enquanto ele fala)</label>
         <LocalVoiceNote on={workspace.settings.localVoice} />
+        <label className="setting-check"><input type="checkbox" checked={workspace.settings.localWatch} onChange={(event) => workspace.setSettings({ localWatch: event.target.checked })} />Vigia local (Whisper): só manda ao Gemini quando ouvir “Jarvis”</label>
+        <WatcherNote on={workspace.settings.localWatch} />
         <p>Usa a API Gemini para gerar áudio em português, com ritmo mais ágil e pausas curtas. Consome a cota de áudio da API e pode adicionar alguns segundos de espera. Se falhar, usa a voz do navegador.</p>
         <label>Voz neural<select aria-label="Voz neural" value={workspace.settings.neuralVoice} onChange={(event) => workspace.setSettings({ neuralVoice: event.target.value })}>
           <option value="Charon">Charon · suave e informativa</option><option value="Orus">Orus · firme</option><option value="Kore">Kore · clara e firme</option><option value="Puck">Puck · descontraída</option>

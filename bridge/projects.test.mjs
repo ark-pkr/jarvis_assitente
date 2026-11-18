@@ -24,9 +24,14 @@ async function approvePlan(files, root, directory, entries, confirm = yes, confi
 
 test('authorization, path traversal, credentials and junctions are enforced', async () => {
   const { files, root, directory, base } = await fixture()
+  // The user's own folder opens without asking; one under AppData still asks, and a no keeps it shut.
+  const open = new ProjectFiles(path.join(base, 'open'))
+  assert.equal((await open.register(directory, no)).path, await fs.realpath(directory))
+  const guarded = path.join(base, 'AppData', 'Roaming', 'App'); await fs.mkdir(guarded, { recursive: true })
   const denied = new ProjectFiles(path.join(base, 'denied'))
-  await assert.rejects(() => denied.register(directory, no), /não autorizada/)
+  await assert.rejects(() => denied.register(guarded, no), /não autorizada/)
   assert.equal((await denied.state()).roots.length, 0)
+  assert.equal((await denied.register(guarded, yes)).name, 'App')
   await assert.rejects(() => files.read('unknown', 'main.js'), /não autorizada/)
   await assert.rejects(() => files.read(root.id, '../main.js'), /fora da pasta/)
   await assert.rejects(() => files.read(root.id, '.env.local'), /reservado/)
@@ -289,4 +294,19 @@ test('project undo preserves untracked files added to the generated folder', asy
   await assert.rejects(() => files.undo(created.id, yes), /conteúdo não criado/)
   assert.equal(await fs.readFile(path.join(directory, 'com-notas', 'index.js'), 'utf8'), 'original')
   assert.equal(await fs.readFile(path.join(directory, 'com-notas', 'minhas-notas.txt'), 'utf8'), 'preservar')
+})
+
+test('folders are found by name in the user folders and at the top of the drives, never in system ones', async () => {
+  await fs.mkdir('.ui-check.local', { recursive: true })
+  const base = await fs.mkdtemp(path.resolve('.ui-check.local/find-'))
+  const home = path.join(base, 'Users', 'ana'), documents = path.join(home, 'OneDrive', 'Imagens', 'Documentos'), drive = path.join(base, 'drive')
+  for (const folder of [path.join(documents, 'Trabalho de Banco'), path.join(drive, 'projeto final 2.0', 'src'), path.join(drive, 'Program Files', 'Projeto Final Pago'), path.join(home, 'AppData', 'projeto final segredo'), path.join(drive, 'Projetos', 'catálogo novo')]) await fs.mkdir(folder, { recursive: true })
+  const files = new ProjectFiles(path.join(base, 'journal'), { personalFolders: async () => [documents], home, drives: [drive] })
+  assert.deepEqual((await files.find('projeto final')).found.map((item) => item.name), ['projeto final 2.0'])
+  assert.deepEqual((await files.find('catalogo')).found.map((item) => item.name), ['catálogo novo'], 'without accents too')
+  assert.deepEqual((await files.find('banco')).found.map((item) => item.path), [path.join(documents, 'Trabalho de Banco')])
+  const roots = await files.ensurePersonal()
+  assert.deepEqual(roots.map((root) => root.path), [await fs.realpath(documents)], 'personal folders open from the start')
+  await files.mutate(async () => { const state = await files.state(); state.roots = []; await files.save(state) })
+  assert.deepEqual(await files.ensurePersonal(), [], 'one taken away stays away')
 })

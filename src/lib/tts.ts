@@ -122,7 +122,15 @@ export function speakingSince(): number {
   return speaking ? speakingAt : 0
 }
 
+/** The sentence being said right now, for the subtitle; '' when he stops. */
+const sentenceListeners = new Set<(text: string) => void>()
+export function onSpokenSentence(listener: (text: string) => void) {
+  sentenceListeners.add(listener)
+  return () => { sentenceListeners.delete(listener) }
+}
+
 function setSpeaking(text: string) {
+  for (const listener of sentenceListeners) listener(text)
   if (text) {
     speaking = text
     speakingAt = Date.now()

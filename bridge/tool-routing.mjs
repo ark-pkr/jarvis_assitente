@@ -45,7 +45,7 @@ const SERVERS = [
   ['jarvis_memory', /lembr|memoriz|\bguarde\b|\bprefer|\banot|sabe sobre mim|\besquec|combinamos|conversamos|falamos|decidimos|aquele assunto|\bontem\b/],
   ['jarvis_library', /meus (arquivos|materiais|documentos|textos)|minhas (anotacoes|apostilas|notas)|onde (eu )?(falei|li|vi|anotei)|indexa|\bbiblioteca\b/],
   ['jarvis_projects', /projeto|arquivo|\bpasta|\bcodigo|\bprograma|\bapi\b|\bsite\b|\bapp\b|\bbug\b|\berro\b|docker|\bteste|organiz|desfa[cz]/],
-  ['jarvis_desktop', /\babr[aei]\w*|aplicativo|\bprograma|vs ?code|\bexcel\b|powerpoint|\bword\b|calculadora|\bbloco de notas\b/],
+  ['jarvis_desktop', /\babr[aei]\w*|\binici[ae]\b|\bexecut[ae]\b|aplicativo|\bprograma|vs ?code|\bexcel\b|powerpoint|\bword\b|calculadora|\bbloco de notas\b/],
   ['jarvis_word', /\bword\b|documento|docx/],
   ['jarvis_lessons', /\bpdf\b|\baula|\bapostila/],
   ['jarvis_assistant', /\bhoje\b|\bo que (eu )?tenho\b|\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b|\bamanha\b|\bdia\b|lembr|\btarefa|rotina|\bparei\b|continu|\bfoco\b|lento|desempenho|\bcpu\b|\bdisco\b|memoria|\bestudo|flashcard|\bmaterial\b|\btimer\b|cronomet|temporizador|pomodoro|\bminutos?\b/],

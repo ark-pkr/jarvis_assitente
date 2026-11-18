@@ -51,7 +51,9 @@ Ele só atende quando ouve **“Jarvis”**, então conversas no ambiente não v
 
 **Contas e datas exatas.** Somas, porcentagens, juros, troco, médias e contas de calendário são feitas por uma calculadora, não pelo modelo: “quanto é 15% de 230?”, “que dia cai daqui a 45 dias?”, “quantos dias úteis até 25/12?”.
 
-**Áudios e vídeos.** Com o arquivo numa pasta autorizada, diga “resume esse áudio” ou “o que foi decidido nessa gravação?”. Ele transcreve, resume, lista tarefas citadas e responde perguntas sobre o conteúdo. Aceita MP3, M4A, OGG/OPUS (áudio do WhatsApp), WAV, MP4, MOV e WEBM, até 150 MB. O arquivo vai ao Gemini e é apagado de lá logo depois.
+**Programas e pastas.** Diga “abre o Netflix” ou “abre a pasta do projeto final”: ele acha o programa no Menu Iniciar e a pasta pelo nome, sem pedir caminho, e abre na hora. Terminais, PowerShell, ferramentas do sistema e desinstaladores não abrem; pastas do Windows, de programas e a AppData pedem confirmação; criar, alterar, mover ou apagar arquivos sempre pede.
+
+**Áudios e vídeos.** Com o arquivo em uma das suas pastas, diga “resume esse áudio” ou “o que foi decidido nessa gravação?”. Ele transcreve, resume, lista tarefas citadas e responde perguntas sobre o conteúdo. Aceita MP3, M4A, OGG/OPUS (áudio do WhatsApp), WAV, MP4, MOV e WEBM, até 150 MB. O arquivo vai ao Gemini e é apagado de lá logo depois.
 
 **Rotina falada.** “Todo dia às 7h me fala o clima e a agenda”: no horário, ele fala o resumo do dia, com clima (da cidade em **Central**), compromissos, lembretes, tarefas e próximo passo.
 
@@ -141,6 +143,7 @@ Depois disso, diga “o que tenho amanhã?” ou “marca dentista sexta às 15h
 
 - **Não ouve você:** pressione **D** e confira “transcription failures” e “error”. Verifique a entrada em **Áudio → Microfone de entrada** e **Configurações do Windows → Privacidade e segurança → Microfone**.
 - **Limite de uso:** a presença da chave não garante cota. Falhas reais aparecem ao enviar um pedido.
+- **Vigia local:** o Whisper, no próprio PC, ouve tudo só para saber se você chamou “Jarvis”; só essas frases vão para o Gemini. É baixado sozinho na primeira vez (cerca de 157 MB) e pode ser desligado em **Áudio**. Se falhar, a escuta volta ao modo anterior por um minuto.
 - **Voz local:** por padrão ele fala com a voz **Faber**, gerada no próprio PC pela Piper, sem gastar o Gemini. Ela é baixada sozinha na primeira vez (cerca de 85 MB) e conferida antes de ser usada; o andamento aparece em **Áudio**. Se a voz local falhar, ele fala com a voz anterior por um minuto e tenta de novo.
 - **Voz muda de repente:** a cota de voz neural acabou. Frases curtas já faladas continuam com a voz neural, e o resto usa a voz do Windows até a cota voltar.
 - **Logs:** ficam em `%APPDATA%\JARVIS\desktop.log`. Para relatar um problema, use **Conexões → Copiar diagnóstico**.

@@ -60,8 +60,11 @@ import { handleBackup } from './backup.mjs'
 import { handleDiagnostics, watchLogs } from './diagnostics.mjs'
 import { createOriginPolicy, corsFor } from './origins.mjs'
 import { createLocalVoice, handleLocalVoice, isLocalVoiceRequest } from './piper.mjs'
+import { createLocalWatcher, handleWatch, isWatchRequest } from './whisper.mjs'
 /** His voice on this computer, started on first use and closed with the bridge. */
 const localVoice = createLocalVoice()
+/** Whisper on this computer, listening only for his name before anything goes to Gemini. */
+const localWatcher = createLocalWatcher()
 process.on('exit', () => localVoice.stop())
 
 watchLogs()
@@ -184,6 +187,7 @@ const handleRequest = async (req, res) => {
   if (req.method === 'POST' && req.url === '/voice') return handleSpeech(req, res, cors)
   if (req.method === 'GET' && req.url?.startsWith('/voice/stream?')) return handleSpeechStream(req, res, cors)
   if (isLocalVoiceRequest(req)) return handleLocalVoice(req, res, cors, localVoice)
+  if (isWatchRequest(req)) return handleWatch(req, res, cors, localWatcher)
 
   if (isMediaRequest(req)) return serveMedia(req, res, cors, PORT)
   if (isSpeechRequest(req)) return serveSpeech(req, res, cors)
