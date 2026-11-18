@@ -15,7 +15,7 @@ import { Diagnostics } from './ui/Diagnostics'
 import { BOOT_MS, useStore, type Timer } from './store'
 import { lastRoomSpeech, startVoice, type Voice, type VoiceMode } from './lib/voice'
 import { createSpeaker, cycleVoice, currentVoiceName, speakingAloud } from './lib/tts'
-import { ensureLocalVoice } from './lib/localVoice'
+import { ensureLocalVoice, ensureLocalWatcher, onLocalVoice } from './lib/localVoice'
 import { watchApproval, type Approval } from './lib/bridge'
 import { approvalQuestion, ASK_AGAIN, readAnswer } from './lib/approvalVoice'
 import { finishLecture, recordLecture, type LectureRecording } from './lib/lectureRecorder'
@@ -874,6 +874,10 @@ export default function App() {
     const warming = warm().catch((err: Error) => s.setError(err.message))
     // His voice on this computer: ready at once when installed, downloaded the first time.
     if (useWorkspace.getState().settings.localVoice) void warming.then(() => ensureLocalVoice())
+    // The watcher: Whisper here, so only sentences that call him by name reach Gemini.
+    if (useWorkspace.getState().settings.localWatch) void warming.then(() => ensureLocalWatcher())
+    // The footer names the voice once at start-up; a download that finishes later has to say so too.
+    onLocalVoice((voice) => { if (voice.state === 'pronto') store.getState().setVoice(currentVoiceName()) })
 
 
     // Long enough for the four-beat start-up sequence in Boot.tsx to play —

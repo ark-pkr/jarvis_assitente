@@ -56,7 +56,7 @@ export function piperPaths(root = dataPath('piper')) {
 const installed = (paths) => [paths.program, paths.model, paths.config].every((file) => existsSync(file))
 
 /** Downloads to a temporary name and keeps it only if it is exactly the tested file. */
-async function download(source, target, { fetch: get = fetch, onProgress = () => {} } = {}) {
+export async function download(source, target, { fetch: get = fetch, onProgress = () => {} } = {}) {
   const partial = `${target}.part`
   const response = await get(source.url, { redirect: 'follow' })
   if (!response.ok || !response.body) throw new Error(`download falhou (HTTP ${response.status})`)
@@ -77,7 +77,7 @@ async function download(source, target, { fetch: get = fetch, onProgress = () =>
  * a plain "tar" can find Git's, which reads no zip and takes "C:" for a host.
  */
 const WINDOWS_TAR = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
-const unzip = (file, into) => new Promise((resolve, reject) => {
+export const unzip = (file, into) => new Promise((resolve, reject) => {
   execFile(WINDOWS_TAR, ['-xf', file, '-C', into], { windowsHide: true }, (error) => error ? reject(error) : resolve())
 })
 

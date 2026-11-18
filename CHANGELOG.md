@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 1.18.0
+
+- **Vigia local (Whisper):** tudo o que o microfone ouve passa primeiro pelo Whisper, no seu computador, só para saber se alguém chamou “Jarvis”. Conversas que não são com ele, como as do balcão, nunca saem do PC nem gastam o Gemini. Quando você chama “Jarvis”, só aquela frase vai para o Gemini, que a transcreve com a precisão de sempre. Pelos registros, isso corta cerca de 94% das transcrições pagas. Na primeira vez, o vigia é baixado sozinho (cerca de 157 MB) e conferido antes de ser usado. A resposta a um chamado começa cerca de 1,5 s mais tarde; na conversa que continua logo depois, nada muda. Pode ser desligado em **Áudio**.
+- **Abre qualquer programa pelo nome, sem perguntar:** ele conhece tudo o que está no Menu Iniciar, inclusive os apps da Microsoft Store (“abre o Netflix”, “abre o Chrome”), sem você informar onde o programa está instalado, e abre na hora, sem confirmação. Terminais, PowerShell, Prompt de Comando, editor do Registro, ferramentas do sistema e desinstaladores continuam fora do alcance dele.
+- **Pastas sem autorização a cada vez:** ele encontra a pasta pelo nome (“abre a pasta do projeto final”), nas suas pastas e no topo dos discos, e lê sem pedir permissão. Área de Trabalho, Documentos, Downloads, Imagens, Músicas e Vídeos já ficam abertas desde o início, mesmo dentro do OneDrive. Pastas do Windows, de programas e a AppData (onde ficam senhas e perfis de navegador) continuam pedindo confirmação, e arquivos de credenciais continuam bloqueados. Criar, alterar, mover ou apagar arquivos ainda pede confirmação.
+- **Só legenda enquanto ele fala:** a caixa com a conversa saiu da tela. A frase que ele está dizendo aparece embaixo do buraco negro e some quando ele termina. A conversa continua no **Histórico**, e a caixa antiga volta marcando **Mostrar a caixa com a conversa** em **Áudio**.
+- **Corrigido:** depois de instalar a voz local, o rodapé continuava mostrando “Microsoft Daniel” até a próxima abertura.
+
 ## 1.17.0
 
 - **Voz no seu computador, sem gastar o Gemini:** o JARVIS agora fala com a voz **Faber** (Piper), gerada no próprio PC. Nenhuma fala usa a cota do Gemini, a voz funciona até sem internet e cada frase fica pronta em menos de meio segundo. Na primeira vez, a voz é baixada sozinha (cerca de 85 MB, menos de 1 minuto) e conferida antes de ser usada; enquanto isso, a voz anterior continua falando. De madrugada ele fala mais baixo. Para voltar à voz do Gemini, desmarque **Voz local Faber** em **Áudio**.

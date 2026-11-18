@@ -8,6 +8,35 @@ import { BladeSweep, Blades } from './Blades'
 import { Effects } from './Effects'
 import { useWorkspace } from '../workspace'
 import { useCinema } from '../lib/cinema'
+import { onSpokenSentence } from '../lib/tts'
+
+/**
+ * The sentence he is saying, under the black hole, gone when he stops. Held a
+ * moment between sentences so the text does not blink off and on mid-answer.
+ */
+function Subtitle() {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    let clearing: ReturnType<typeof setTimeout> | null = null
+    const stop = onSpokenSentence((sentence) => {
+      if (clearing) clearTimeout(clearing)
+      clearing = null
+      if (sentence) setText(sentence)
+      else clearing = setTimeout(() => setText(''), 600)
+    })
+    return () => { stop(); if (clearing) clearTimeout(clearing) }
+  }, [])
+  return (
+    <AnimatePresence>
+      {text && (
+        <motion.div key="subtitle" className="subtitle" role="status" aria-live="polite"
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .25 }}>
+          {text}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
 
 const statusText: Record<Phase, string> = {
   offline: 'DESLIGADO',
@@ -169,6 +198,7 @@ export function Hud() {
   const looking = useStore((s) => s.looking)
   const caption = useStore((s) => s.caption)
   const ui = useStore((s) => s.ui)
+  const conversationBox = useWorkspace((s) => s.settings.conversationBox)
   const cinema = useCinema((s) => s.on)
 
   // accentFor folds JARVIS's overrides in over the phase colour, so one
@@ -267,8 +297,11 @@ export function Hud() {
         )}
       </AnimatePresence>
 
+      {/* While he speaks, the sentence he is saying, as a subtitle. The full log is an option. */}
+      {ui.chrome.transcript && !conversationBox && <Subtitle />}
+
       {/* Conversation log — last few turns, fading upward */}
-      {ui.chrome.transcript && (
+      {ui.chrome.transcript && conversationBox && (
         <div className="log">
           <AnimatePresence initial={false}>
             {turns.slice(-4).map((t) => (

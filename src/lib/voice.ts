@@ -3,6 +3,7 @@ import { getMic } from './audio'
 import { speakingNow } from './tts'
 import { startVad, type Vad } from './vad'
 import { openLiveStt, type LiveAnswer, type LiveMiss, type LiveStt } from './liveStt'
+import { localWatcherReady, watchLocally } from './localVoice'
 import { caps } from './capabilities'
 import { useWorkspace } from '../workspace'
 import { isExplicitInterruption } from './voiceGuard'
@@ -165,7 +166,14 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
    * Order is preserved because the drain is single-flight, which matters —
    * "London" arriving before "what's the weather in" is worse than either.
    */
-  const pendingAudio: { blob: Blob; generation: number; at: number; addressed: boolean; streamed: Promise<LiveAnswer | LiveMiss> | null }[] = []
+  const pendingAudio: { blob: Blob; generation: number; at: number; addressed: boolean; streamed: Promise<LiveAnswer | LiveMiss> | null; watch?: boolean }[] = []
+  /**
+   * The watcher: Whisper on this computer hears every sentence nobody has called
+   * him into, and only one that calls "Jarvis" goes on to Gemini. A watcher that
+   * failed sits out a minute, and meanwhile sentences go the old way.
+   */
+  let watchRetryAt = 0
+  const watching = () => Boolean(window.jarvisDesktop) && !localWake && useWorkspace.getState().settings.localWatch && localWatcherReady() && Date.now() >= watchRetryAt
   /** The segment being transcribed as it is said, once it may leave the machine. */
   let stream: LiveStt | null = null
   /** Its audio from the moment it began, until it is allowed to go. */
@@ -197,7 +205,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
    * transcript arriving — and the transcript belongs to the mode the user is in
    * now, not the one they interrupted.
    */
-  const transcribe = async ({ blob, generation: captured, at, addressed, streamed }: (typeof pendingAudio)[number]) => {
+  const transcribe = async ({ blob, generation: captured, at, addressed, streamed, watch }: (typeof pendingAudio)[number]) => {
     if (captured !== generation || Date.now() - at > 120000) return
     if (stopped || h.mode() === 'deaf') return
     const mode = h.mode()
@@ -238,6 +246,20 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       }
     } else if (Date.now() <= manualUntil) {
       manualUntil = 0
+    }
+    if (watch) {
+      const heard = await watchLocally(blob, captureAbort.signal)
+      if (stopped || captured !== generation) return
+      if (heard === null) {
+        // Could not tell. Better one sentence to Gemini than a call missed.
+        watchRetryAt = Date.now() + 60000
+        diag.lastError = 'vigia local indisponível; usando a transcrição Gemini por 1 minuto'
+      } else if (!calledByName(heard)) {
+        drop(heard ? 'vigia local: fala não dirigida ao Jarvis; nada foi enviado' : 'vigia local: nada inteligível; nada foi enviado')
+        return
+      }
+      // Whisper heard the name; Gemini now hears the sentence properly, and the
+      // usual check on its words still stands if Whisper only imagined it.
     }
     const t0 = performance.now()
     try {
@@ -397,7 +419,7 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
     }
   }
 
-  const mayLeave = () => segmentMaySend({ localWake: Boolean(localWake), heldText: Boolean(assemble.held()), addressedAtStart, addressedUntil, now: Date.now() })
+  const mayLeave = () => segmentMaySend({ localWake: Boolean(localWake) || watching(), heldText: Boolean(assemble.held()), addressedAtStart, addressedUntil, now: Date.now() })
 
   vad = await startVad({
     mayBarge: h.mayBarge,
@@ -443,8 +465,16 @@ async function startBridgeVoice(h: VoiceHandlers, onFallback?: (voice: Voice) =>
       unsent = []
       if (stopped || ['guard', 'deaf'].includes(h.mode())) { streaming?.abort(); return }
       if (!mayLeave()) {
-        drop('sem a palavra de ativação; nada foi enviado')
         streaming?.abort()
+        if (watching()) {
+          // Heard here first. A busy room can speak faster than the watcher
+          // listens; only the newest sentences are worth keeping, the name being in one of them.
+          while (pendingAudio.length >= 3) pendingAudio.shift()
+          pendingAudio.push({ blob, generation, at: Date.now(), addressed: false, streamed: null, watch: true })
+          void drain()
+          return
+        }
+        drop('sem a palavra de ativação; nada foi enviado')
         return
       }
       if (pendingAudio.length >= 2) { streaming?.abort(); pendingAudio.length = 0; generation++; return }
